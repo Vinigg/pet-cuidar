@@ -31,6 +31,7 @@ public class ConsultaService {
     private final PredicaoNoShowRepository predicaoRepository;
     private final LembreteGeneratorService lembreteGeneratorService;
     private final NoShowPredictorService noShowPredictorService;
+    private final ConsultaStateMachine consultaStateMachine;
 
     public ConsultaService(ConsultaRepository consultaRepository,
                             PetRepository petRepository,
@@ -38,7 +39,8 @@ public class ConsultaService {
                             LembreteRepository lembreteRepository,
                             PredicaoNoShowRepository predicaoRepository,
                             LembreteGeneratorService lembreteGeneratorService,
-                            NoShowPredictorService noShowPredictorService) {
+                            NoShowPredictorService noShowPredictorService,
+                            ConsultaStateMachine consultaStateMachine) {
         this.consultaRepository = consultaRepository;
         this.petRepository = petRepository;
         this.veterinarioRepository = veterinarioRepository;
@@ -46,6 +48,7 @@ public class ConsultaService {
         this.predicaoRepository = predicaoRepository;
         this.lembreteGeneratorService = lembreteGeneratorService;
         this.noShowPredictorService = noShowPredictorService;
+        this.consultaStateMachine = consultaStateMachine;
     }
 
     // GET /veterinarios/{id}/disponibilidade
@@ -91,8 +94,6 @@ public class ConsultaService {
         consulta.setPet(pet);
         consulta.setVeterinario(veterinario);
         consulta.setDataHora(dto.getDataHora());
-        consulta.setStatus(StatusConsulta.AGENDADA);
-
         return ConsultaResponseDTO.from(consultaRepository.save(consulta));
     }
 
@@ -103,6 +104,13 @@ public class ConsultaService {
                 .stream()
                 .map(ConsultaResponseDTO::from)
                 .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public ConsultaResponseDTO atualizarStatus(Long consultaId, StatusConsulta status) {
+        Consulta consulta = buscarConsulta(consultaId);
+        consultaStateMachine.transicionar(consulta, status);
+        return ConsultaResponseDTO.from(consultaRepository.save(consulta));
     }
 
     // GET /consultas/{id}/predicao-no-show (US4.1)

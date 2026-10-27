@@ -3,6 +3,7 @@ package com.petcuidar.controller;
 import com.petcuidar.dto.*;
 import com.petcuidar.service.ConsultaService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -32,6 +33,13 @@ public class ConsultaController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate data) {
         return consultaService.listarDoDia(data);
     }
+
+    @PatchMapping("/{id}/status")
+    public ConsultaResponseDTO atualizarStatus(@PathVariable Long id, @Valid @RequestBody StatusRequest request) {
+        return consultaService.atualizarStatus(id, request.status());
+    }
+
+    public record StatusRequest(@NotNull com.petcuidar.model.StatusConsulta status) {}
 
     @GetMapping("/{id}/predicao-no-show")
     public PredicaoNoShowDTO predicaoNoShow(@PathVariable Long id) {
