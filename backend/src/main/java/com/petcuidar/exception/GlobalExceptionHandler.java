@@ -5,6 +5,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import jakarta.validation.ConstraintViolationException;
 
 import java.util.stream.Collectors;
 
@@ -38,5 +42,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiErro> handleIllegalArgument(IllegalArgumentException ex) {
         return ResponseEntity.badRequest().body(new ApiErro(400, ex.getMessage()));
+    }
+
+    @ExceptionHandler({HttpMessageNotReadableException.class, MissingServletRequestParameterException.class,
+            MethodArgumentTypeMismatchException.class, ConstraintViolationException.class})
+    public ResponseEntity<ApiErro> handleRequisicaoInvalida(Exception ex) {
+        return ResponseEntity.badRequest().body(new ApiErro(400, "Requisicao invalida ou malformada."));
+    }
+
+    @ExceptionHandler(TransicaoEstadoInvalidaException.class)
+    public ResponseEntity<ApiErro> handleTransicao(TransicaoEstadoInvalidaException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErro(409, ex.getMessage()));
     }
 }

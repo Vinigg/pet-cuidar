@@ -77,6 +77,7 @@ RestTemplate/WebClient).
 | GET | `/veterinarios` | Lista veterinarios |
 | GET | `/veterinarios/{id}/disponibilidade?data=` | Horarios livres/ocupados no dia |
 | POST | `/consultas` | Cria agendamento (valida conflito de horario) |
+| PATCH | `/consultas/{id}/status` | Transiciona status da consulta conforme a máquina de estados |
 | GET | `/consultas?data=` | Lista consultas do dia (painel da recepcionista) |
 | GET | `/consultas/{id}/predicao-no-show` | Score de risco de falta + motivo |
 | POST | `/consultas/{id}/lembrete` | Gera e "envia" o lembrete (IA + fallback) |

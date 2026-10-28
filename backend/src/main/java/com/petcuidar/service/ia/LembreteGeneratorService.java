@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.LongAdder;
+import jakarta.annotation.PreDestroy;
 
 /**
  * Geracao do texto de lembrete via IA (US3.1).
@@ -30,15 +32,26 @@ public class LembreteGeneratorService {
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy 'as' HH:mm");
 
     private final IaProperties props;
-    private final ExecutorService executor = Executors.newCachedThreadPool();
+    private final LembreteIaClient clienteIa;
+    private final ExecutorService executor = new ThreadPoolExecutor(0, 4, 60, TimeUnit.SECONDS,
+            new SynchronousQueue<>(), r -> {
+                Thread t = new Thread(r, "ia-lembrete"); t.setDaemon(true); return t;
+            }, new ThreadPoolExecutor.AbortPolicy());
 
     // Estado simples do circuit breaker (em memoria; para producao, mover para Redis
     // ou usar uma lib dedicada como resilience4j em ambiente multi-instancia)
+    public enum EstadoCircuito { FECHADO, ABERTO, TESTE }
+    private EstadoCircuito estadoCircuito = EstadoCircuito.FECHADO;
     private int falhasSeguidas = 0;
     private long circuitoAbertoAte = 0;
+    private final LongAdder falhas = new LongAdder(), timeouts = new LongAdder(), fallbacks = new LongAdder(), invalidas = new LongAdder(), sucessos = new LongAdder();
 
-    public LembreteGeneratorService(IaProperties props) {
+    public record Metricas(EstadoCircuito estado, int falhasConsecutivas, long falhas, long timeouts,
+                           long fallbacks, long respostasInvalidas, long sucessos) {}
+
+    public LembreteGeneratorService(IaProperties props, LembreteIaClient clienteIa) {
         this.props = props;
+        this.clienteIa = clienteIa;
     }
 
     public static class ResultadoLembrete {
@@ -61,49 +74,48 @@ public class LembreteGeneratorService {
 
         String fallback = montarTemplateFallback(nomeTutor, nomePet, dataHoraFmt, veterinario);
 
-        if (circuitoAberto()) {
-            log.warn("Circuit breaker de IA aberto - usando fallback direto para consulta {}", consulta.getId());
+        if (!adquirirPermissao()) {
+            fallbacks.increment();
+            log.warn("Circuit breaker de IA aberto - usando fallback direto (fallbacks={})", fallbacks.sum());
             return new ResultadoLembrete(null, fallback, true);
         }
 
         String textoGerado;
         try {
             textoGerado = chamarModeloComTimeout(nomeTutor, nomePet, dataHoraFmt, veterinario);
-            registrarSucesso();
         } catch (Exception e) {
-            log.warn("Falha ao gerar lembrete via IA para consulta {}: {}", consulta.getId(), e.getMessage());
+            log.warn("Falha ao gerar lembrete via IA: {}", e.getClass().getSimpleName());
             registrarFalha();
+            fallbacks.increment();
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            log.info("Fallback deterministico utilizado (falhas={}, timeouts={}, fallbacks={})", falhas.sum(), timeouts.sum(), fallbacks.sum());
             return new ResultadoLembrete(null, fallback, true);
         }
 
         if (!guardrailAprova(textoGerado, nomeTutor, nomePet, dataHoraFmt)) {
-            log.warn("Guardrail rejeitou o texto gerado pela IA para consulta {} - usando fallback", consulta.getId());
+            log.warn("Guardrail rejeitou a resposta da IA - usando fallback");
+            invalidas.increment();
+            registrarFalha();
+            fallbacks.increment();
+            log.info("Fallback deterministico utilizado apos rejeicao do guardrail (respostas_invalidas={}, fallbacks={})", invalidas.sum(), fallbacks.sum());
             return new ResultadoLembrete(textoGerado, fallback, true);
         }
+
+        registrarSucesso();
 
         return new ResultadoLembrete(textoGerado, textoGerado, false);
     }
 
     /**
-     * Chamada ao modelo de linguagem com timeout. Neste projeto de referencia a
-     * chamada e simulada (sem custo/API key) para manter o repositorio
-     * executavel sem segredos; em producao, o corpo deste metodo faria uma
-     * chamada HTTP (RestTemplate/WebClient) a API do provedor de IA (ex.:
-     * Anthropic ou OpenAI), enviando o prompt estruturado descrito no
-     * repositorio de prompts do documento de entrega.
+     * Chamada ao cliente de IA com timeout. Neste projeto o bean padrão é o
+     * simulador local, sem custo ou credenciais. Um adaptador de provedor pode
+     * implementar LembreteIaClient sem mudar o circuit breaker ou o fallback.
      */
     private String chamarModeloComTimeout(String nomeTutor, String nomePet, String dataHoraFmt, String veterinario)
             throws TimeoutException, ExecutionException, InterruptedException {
-        Future<String> future = executor.submit(() -> simularChamadaIa(nomeTutor, nomePet, dataHoraFmt, veterinario));
-        return future.get(props.getTimeoutMs(), TimeUnit.MILLISECONDS);
-    }
-
-    private String simularChamadaIa(String nomeTutor, String nomePet, String dataHoraFmt, String veterinario) {
-        // Simulacao local do texto que um LLM geraria a partir do prompt de
-        // "Gerar lembrete de consulta" (ver documento, Secao 5.1).
-        return String.format(
-                "Ola %s! Passando para lembrar que %s tem consulta marcada com %s no dia %s. Ate la!",
-                nomeTutor, nomePet, veterinario, dataHoraFmt);
+        Future<String> future = executor.submit(() -> clienteIa.gerar(nomeTutor, nomePet, dataHoraFmt, veterinario));
+        try { return future.get(props.getTimeoutMs(), TimeUnit.MILLISECONDS); }
+        catch (TimeoutException e) { timeouts.increment(); future.cancel(true); throw e; }
     }
 
     private boolean guardrailAprova(String texto, String nomeTutor, String nomePet, String dataHoraFmt) {
@@ -117,20 +129,40 @@ public class LembreteGeneratorService {
                 nomeTutor, nomePet, veterinario, dataHoraFmt);
     }
 
-    private synchronized boolean circuitoAberto() {
-        return System.currentTimeMillis() < circuitoAbertoAte;
+    private synchronized boolean adquirirPermissao() {
+        long agora = System.currentTimeMillis();
+        if (estadoCircuito == EstadoCircuito.ABERTO) {
+            if (agora < circuitoAbertoAte) return false;
+            estadoCircuito = EstadoCircuito.TESTE;
+            log.info("Circuit breaker de IA em tentativa de recuperacao");
+            return true;
+        }
+        return estadoCircuito != EstadoCircuito.TESTE;
     }
 
     private synchronized void registrarFalha() {
         falhasSeguidas++;
+        falhas.increment();
         if (falhasSeguidas >= props.getCircuitBreaker().getMaxFalhas()) {
             circuitoAbertoAte = System.currentTimeMillis() + props.getCircuitBreaker().getResetMs();
-            log.warn("Circuit breaker de IA ABERTO por {} ms apos {} falhas seguidas",
+            boolean reaberto = estadoCircuito != EstadoCircuito.ABERTO;
+            estadoCircuito = EstadoCircuito.ABERTO;
+            if (reaberto) log.warn("Circuit breaker de IA ABERTO por {} ms apos {} falhas seguidas",
                     props.getCircuitBreaker().getResetMs(), falhasSeguidas);
         }
     }
 
     private synchronized void registrarSucesso() {
+        if (estadoCircuito != EstadoCircuito.FECHADO) log.info("Circuit breaker de IA FECHADO apos recuperacao");
+        estadoCircuito = EstadoCircuito.FECHADO;
         falhasSeguidas = 0;
+        sucessos.increment();
     }
+
+    public synchronized Metricas obterMetricas() {
+        return new Metricas(estadoCircuito, falhasSeguidas, falhas.sum(), timeouts.sum(),
+                fallbacks.sum(), invalidas.sum(), sucessos.sum());
+    }
+
+    @PreDestroy public void encerrarExecutor() { executor.shutdownNow(); }
 }
