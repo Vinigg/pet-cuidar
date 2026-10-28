@@ -9,6 +9,7 @@ export const api = axios.create({
 
 // ---- Tutores / Pets ----
 export const cadastrarTutor = (dados) => api.post("/tutores", dados);
+export const listarPets = (tutorId) => api.get("/pets", { params: { tutorId } });
 
 // ---- Veterinarios ----
 export const listarVeterinarios = () => api.get("/veterinarios");

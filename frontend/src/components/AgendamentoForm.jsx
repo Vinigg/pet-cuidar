@@ -1,7 +1,11 @@
-import React, { useEffect, useState } from "react";
-import { listarVeterinarios, listarDisponibilidade, criarConsulta } from "../api/api";
+import React, { useEffect, useRef, useState } from "react";
+import { listarPets, listarVeterinarios, listarDisponibilidade, criarConsulta } from "../api/api";
 
-export default function AgendamentoForm() {
+export default function AgendamentoForm({ tutorId }) {
+  const [pets, setPets] = useState([]);
+  const [carregandoPets, setCarregandoPets] = useState(true);
+  const [erroPets, setErroPets] = useState(null);
+  const [tentativaPets, setTentativaPets] = useState(0);
   const [veterinarios, setVeterinarios] = useState([]);
   const [veterinarioId, setVeterinarioId] = useState("");
   const [data, setData] = useState("");
@@ -10,28 +14,74 @@ export default function AgendamentoForm() {
   const [horarioSelecionado, setHorarioSelecionado] = useState("");
   const [mensagem, setMensagem] = useState(null);
   const [erro, setErro] = useState(null);
+  const [carregandoHorarios, setCarregandoHorarios] = useState(false);
+  const [consultouHorarios, setConsultouHorarios] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const buscaAtual = useRef(0);
+  const hoje = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
   useEffect(() => {
+    let ativo = true;
+    setCarregandoPets(true);
+    setErroPets(null);
+    setPets([]);
+    setPetId("");
+    listarPets(tutorId)
+      .then((res) => { if (ativo) setPets(res.data); })
+      .catch(() => { if (ativo) setErroPets("Nao foi possivel carregar os pets."); })
+      .finally(() => { if (ativo) setCarregandoPets(false); });
+    return () => { ativo = false; };
+  }, [tutorId, tentativaPets]);
+
+  useEffect(() => {
+    let ativo = true;
     listarVeterinarios()
-      .then((res) => setVeterinarios(res.data))
-      .catch(() => setErro("Nao foi possivel carregar os veterinarios."));
+      .then((res) => { if (ativo) setVeterinarios(res.data); })
+      .catch(() => { if (ativo) setErro("Nao foi possivel carregar os veterinarios."); });
+    return () => { ativo = false; buscaAtual.current += 1; };
   }, []);
 
-  const buscarDisponibilidade = async () => {
-    if (!veterinarioId || !data) return;
+  const limparHorarios = () => {
+    buscaAtual.current += 1;
+    setHorarios([]);
+    setHorarioSelecionado("");
+    setConsultouHorarios(false);
+    setCarregandoHorarios(false);
+    setMensagem(null);
     setErro(null);
+  };
+
+  const buscarDisponibilidade = async () => {
+    if (!veterinarioId || !data || data < hoje) return;
+    const busca = ++buscaAtual.current;
+    setErro(null);
+    setHorarios([]);
+    setHorarioSelecionado("");
+    setConsultouHorarios(false);
+    setCarregandoHorarios(true);
     try {
       const res = await listarDisponibilidade(veterinarioId, data);
+      if (busca !== buscaAtual.current) return;
       setHorarios(res.data);
+      setConsultouHorarios(true);
     } catch {
-      setErro("Nao foi possivel carregar a disponibilidade.");
+      if (busca === buscaAtual.current) setErro("Nao foi possivel carregar a disponibilidade.");
+    } finally {
+      if (busca === buscaAtual.current) setCarregandoHorarios(false);
     }
   };
 
   const agendar = async (e) => {
     e.preventDefault();
+    if (enviando) return;
     setMensagem(null);
     setErro(null);
+    if (!pets.some((pet) => String(pet.id) === petId) || !veterinarioId || !data || data < hoje ||
+      !horarios.some((horario) => horario.horario === horarioSelecionado && horario.disponivel)) {
+      setErro("Selecione um pet, um veterinario, uma data valida e um horario disponivel.");
+      return;
+    }
+    setEnviando(true);
     try {
       await criarConsulta({
         petId: Number(petId),
@@ -40,9 +90,11 @@ export default function AgendamentoForm() {
       });
       setMensagem("Consulta agendada com sucesso!");
       setHorarioSelecionado("");
-      buscarDisponibilidade();
+      await buscarDisponibilidade();
     } catch (err) {
       setErro(err.response?.data?.mensagem || "Nao foi possivel agendar. O horario pode ja estar ocupado.");
+    } finally {
+      setEnviando(false);
     }
   };
 
@@ -51,13 +103,22 @@ export default function AgendamentoForm() {
       <h2>Agendar consulta</h2>
       <form onSubmit={agendar}>
         <label>
-          Id do pet
-          <input required type="number" value={petId} onChange={(e) => setPetId(e.target.value)} />
+          Pet
+          <select required value={petId} disabled={carregandoPets || Boolean(erroPets) || pets.length === 0 || enviando} onChange={(e) => { setPetId(e.target.value); setMensagem(null); }}>
+            <option value="">{carregandoPets ? "Carregando pets..." : "Selecione um pet..."}</option>
+            {pets.map((pet) => (
+              <option key={pet.id} value={pet.id}>
+                {pet.nome}{pet.especie ? ` - ${pet.especie}` : ""}{pet.tutorNome ? ` (Tutor: ${pet.tutorNome})` : ""}
+              </option>
+            ))}
+          </select>
         </label>
+        {erroPets && <div role="alert"><p className="erro">{erroPets}</p><button type="button" className="btn-secundario" onClick={() => setTentativaPets((atual) => atual + 1)}>Tentar novamente</button></div>}
+        {!carregandoPets && !erroPets && pets.length === 0 && <p role="status">Nenhum pet cadastrado.</p>}
 
         <label>
           Veterinario
-          <select required value={veterinarioId} onChange={(e) => setVeterinarioId(e.target.value)}>
+          <select required value={veterinarioId} disabled={enviando} onChange={(e) => { setVeterinarioId(e.target.value); limparHorarios(); }}>
             <option value="">Selecione...</option>
             {veterinarios.map((v) => (
               <option key={v.id} value={v.id}>
@@ -69,12 +130,14 @@ export default function AgendamentoForm() {
 
         <label>
           Data
-          <input required type="date" value={data} onChange={(e) => setData(e.target.value)} />
+          <input required type="date" min={hoje} value={data} disabled={enviando} onChange={(e) => { setData(e.target.value); limparHorarios(); }} />
         </label>
 
-        <button type="button" className="btn-secundario" onClick={buscarDisponibilidade}>
-          Ver horarios disponiveis
+        <button type="button" className="btn-secundario" onClick={buscarDisponibilidade} disabled={!veterinarioId || !data || data < hoje || carregandoHorarios || enviando}>
+          {carregandoHorarios ? "Buscando horarios..." : "Ver horarios disponiveis"}
         </button>
+
+        {consultouHorarios && !horarios.some((horario) => horario.disponivel) && <p role="status">Nenhum horario disponivel nesta data.</p>}
 
         {horarios.length > 0 && (
           <div className="grade-horarios">
@@ -82,7 +145,8 @@ export default function AgendamentoForm() {
               <button
                 type="button"
                 key={h.horario}
-                disabled={!h.disponivel}
+                disabled={!h.disponivel || enviando}
+                aria-pressed={horarioSelecionado === h.horario}
                 className={`horario ${horarioSelecionado === h.horario ? "selecionado" : ""}`}
                 onClick={() => setHorarioSelecionado(h.horario)}
               >
@@ -93,13 +157,13 @@ export default function AgendamentoForm() {
         )}
 
         <div className="acoes">
-          <button type="submit" disabled={!horarioSelecionado}>
-            Confirmar agendamento
+          <button type="submit" disabled={!petId || !horarioSelecionado || carregandoHorarios || enviando}>
+            {enviando ? "Agendando..." : "Confirmar agendamento"}
           </button>
         </div>
 
-        {mensagem && <p className="sucesso">{mensagem}</p>}
-        {erro && <p className="erro">{erro}</p>}
+        {mensagem && <p className="sucesso" role="status">{mensagem}</p>}
+        {erro && <p className="erro" role="alert">{erro}</p>}
       </form>
     </div>
   );

@@ -1,6 +1,7 @@
 package com.petcuidar.service;
 
 import com.petcuidar.dto.ResumoHistoricoDTO;
+import com.petcuidar.dto.PetOpcaoDTO;
 import com.petcuidar.exception.RecursoNaoEncontradoException;
 import com.petcuidar.model.HistoricoAtendimento;
 import com.petcuidar.model.Pet;
@@ -24,6 +25,10 @@ public class PetService {
         this.petRepository = petRepository;
         this.historicoRepository = historicoRepository;
         this.resumoHistoricoService = resumoHistoricoService;
+    }
+
+    public List<PetOpcaoDTO> listarOpcoes(Long tutorId) {
+        return petRepository.listarOpcoes(tutorId);
     }
 
     public List<HistoricoAtendimento> listarHistorico(Long petId) {

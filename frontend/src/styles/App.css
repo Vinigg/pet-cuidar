@@ -91,6 +91,8 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .sucesso { color: var(--green); font-weight: bold; }
 .erro { color: var(--red); font-weight: bold; }
+.erro-campo { display: block; color: var(--red); margin-top: 0.3rem; font-size: 0.85rem; }
+input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--red); }
 .aviso { color: var(--amber); font-weight: bold; }
 
 .grade-horarios {

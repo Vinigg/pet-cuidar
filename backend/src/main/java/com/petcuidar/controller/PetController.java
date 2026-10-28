@@ -1,6 +1,7 @@
 package com.petcuidar.controller;
 
 import com.petcuidar.dto.ResumoHistoricoDTO;
+import com.petcuidar.dto.PetOpcaoDTO;
 import com.petcuidar.model.HistoricoAtendimento;
 import com.petcuidar.service.PetService;
 import org.springframework.web.bind.annotation.*;
@@ -15,6 +16,11 @@ public class PetController {
 
     public PetController(PetService petService) {
         this.petService = petService;
+    }
+
+    @GetMapping
+    public List<PetOpcaoDTO> listar(@RequestParam(required = false) Long tutorId) {
+        return petService.listarOpcoes(tutorId);
     }
 
     @GetMapping("/{id}/historico")
