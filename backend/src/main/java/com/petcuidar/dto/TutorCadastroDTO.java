@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 
 import java.util.List;
 
@@ -23,7 +24,7 @@ public class TutorCadastroDTO {
     private String cpf;
 
     @NotEmpty(message = "E necessario cadastrar pelo menos um pet")
-    private List<@Valid PetCadastroDTO> pets;
+    private List<@NotNull(message = "Pet nao pode ser nulo") @Valid PetCadastroDTO> pets;
 
     public String getNome() { return nome; }
     public void setNome(String nome) { this.nome = nome; }
