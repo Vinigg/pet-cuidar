@@ -1,7 +1,7 @@
 package com.petcuidar.controller;
 
 import com.petcuidar.dto.TutorCadastroDTO;
-import com.petcuidar.model.Tutor;
+import com.petcuidar.dto.TutorResponseDTO;
 import com.petcuidar.service.TutorService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -19,7 +19,7 @@ public class TutorController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Tutor cadastrar(@Valid @RequestBody TutorCadastroDTO dto) {
+    public TutorResponseDTO cadastrar(@Valid @RequestBody TutorCadastroDTO dto) {
         return tutorService.cadastrar(dto);
     }
 }

@@ -1,12 +1,16 @@
 package com.petcuidar.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 public class PetCadastroDTO {
     @NotBlank
     private String nome;
     private String especie;
+    @PositiveOrZero(message = "Idade nao pode ser negativa")
     private Integer idade;
+    @Size(max = 1000, message = "Alergias devem ter no maximo 1000 caracteres")
     private String alergiasCriticas;
 
     public String getNome() { return nome; }
