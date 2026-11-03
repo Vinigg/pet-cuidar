@@ -47,6 +47,13 @@
             <version>6.4.4.Final</version>
         </dependency>
 
+        <!-- SDK oficial da Anthropic: geracao de lembretes via LLM (PC-030) -->
+        <dependency>
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>3.2.0</version>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

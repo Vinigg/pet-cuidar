@@ -6,7 +6,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.time.format.DateTimeFormatter;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.LongAdder;
 import jakarta.annotation.PreDestroy;
@@ -16,11 +18,11 @@ import jakarta.annotation.PreDestroy;
  *
  * Padrao aplicado (Secao 3.4 / 4.2 do documento):
  *  1. Chama o modelo de linguagem com timeout curto.
- *  2. Guardrail: valida deterministicamente se o texto gerado contem o
- *     nome do pet, do tutor e a data/hora corretos.
- *  3. Se a chamada falhar, estourar o timeout, ou o guardrail rejeitar o
- *     texto, usa-se SEMPRE o template fixo de fallback - o lembrete nunca
- *     deixa de ser enviado por causa de um problema na IA.
+ *  2. Guardrail ({@link LembreteGuardrail}): valida deterministicamente nome
+ *     do tutor, do pet, data e horario, e rejeita dados nao fornecidos.
+ *  3. Se a chamada falhar, estourar o timeout, responder sem texto util, ou o
+ *     guardrail rejeitar o texto, usa-se SEMPRE o template ({@link LembreteTemplate})
+ *     - o lembrete nunca deixa de ser enviado por causa de um problema na IA.
  *  4. Um "circuit breaker" simples interrompe as chamadas ao modelo apos
  *     N falhas seguidas, evitando penalizar cada requisicao com o timeout
  *     inteiro enquanto o servico externo estiver fora do ar.
@@ -29,10 +31,11 @@ import jakarta.annotation.PreDestroy;
 public class LembreteGeneratorService {
 
     private static final Logger log = LoggerFactory.getLogger(LembreteGeneratorService.class);
-    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy 'as' HH:mm");
 
     private final IaProperties props;
     private final LembreteIaClient clienteIa;
+    private final LembreteTemplate template;
+    private final LembreteGuardrail guardrail;
     private final ExecutorService executor = new ThreadPoolExecutor(0, 4, 60, TimeUnit.SECONDS,
             new SynchronousQueue<>(), r -> {
                 Thread t = new Thread(r, "ia-lembrete"); t.setDaemon(true); return t;
@@ -49,9 +52,18 @@ public class LembreteGeneratorService {
     public record Metricas(EstadoCircuito estado, int falhasConsecutivas, long falhas, long timeouts,
                            long fallbacks, long respostasInvalidas, long sucessos) {}
 
-    public LembreteGeneratorService(IaProperties props, LembreteIaClient clienteIa) {
+    @Autowired
+    public LembreteGeneratorService(IaProperties props, LembreteIaClient clienteIa,
+                                    LembreteTemplate template, LembreteGuardrail guardrail) {
         this.props = props;
         this.clienteIa = clienteIa;
+        this.template = template;
+        this.guardrail = guardrail;
+    }
+
+    /** Conveniencia para testes: template e guardrail com o nome padrao da clinica. */
+    public LembreteGeneratorService(IaProperties props, LembreteIaClient clienteIa) {
+        this(props, clienteIa, new LembreteTemplate("Pet Cuidar"), new LembreteGuardrail("Pet Cuidar"));
     }
 
     public static class ResultadoLembrete {
@@ -67,12 +79,10 @@ public class LembreteGeneratorService {
     }
 
     public ResultadoLembrete gerar(Consulta consulta) {
-        String nomeTutor = consulta.getPet().getTutor().getNome();
-        String nomePet = consulta.getPet().getNome();
-        String dataHoraFmt = consulta.getDataHora().format(FMT);
-        String veterinario = consulta.getVeterinario().getNome();
-
-        String fallback = montarTemplateFallback(nomeTutor, nomePet, dataHoraFmt, veterinario);
+        DadosLembrete dados = DadosLembrete.de(consulta);
+        // Valida os campos obrigatorios antes de chamar a IA: sem eles nem o
+        // template consegue produzir um lembrete correto.
+        String fallback = template.montar(dados);
 
         if (!adquirirPermissao()) {
             fallbacks.increment();
@@ -82,18 +92,26 @@ public class LembreteGeneratorService {
 
         String textoGerado;
         try {
-            textoGerado = chamarModeloComTimeout(nomeTutor, nomePet, dataHoraFmt, veterinario);
+            textoGerado = chamarModeloComTimeout(dados);
         } catch (Exception e) {
-            log.warn("Falha ao gerar lembrete via IA: {}", e.getClass().getSimpleName());
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            Throwable causa = e instanceof ExecutionException && e.getCause() != null ? e.getCause() : e;
+            if (causa instanceof RespostaIaInvalidaException) {
+                invalidas.increment();
+                log.warn("Resposta da IA sem texto utilizavel ({})", causa.getMessage());
+            } else {
+                log.warn("Falha ao gerar lembrete via IA: {}", causa.getClass().getSimpleName());
+            }
             registrarFalha();
             fallbacks.increment();
-            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            log.info("Fallback deterministico utilizado (falhas={}, timeouts={}, fallbacks={})", falhas.sum(), timeouts.sum(), fallbacks.sum());
+            log.info("Fallback deterministico utilizado (falhas={}, timeouts={}, respostas_invalidas={}, fallbacks={})",
+                    falhas.sum(), timeouts.sum(), invalidas.sum(), fallbacks.sum());
             return new ResultadoLembrete(null, fallback, true);
         }
 
-        if (!guardrailAprova(textoGerado, nomeTutor, nomePet, dataHoraFmt)) {
-            log.warn("Guardrail rejeitou a resposta da IA - usando fallback");
+        Optional<LembreteGuardrail.Motivo> rejeicao = guardrail.avaliar(textoGerado, dados);
+        if (rejeicao.isPresent()) {
+            log.warn("Guardrail rejeitou a resposta da IA (motivo={}) - usando fallback", rejeicao.get());
             invalidas.increment();
             registrarFalha();
             fallbacks.increment();
@@ -103,30 +121,20 @@ public class LembreteGeneratorService {
 
         registrarSucesso();
 
-        return new ResultadoLembrete(textoGerado, textoGerado, false);
+        String aprovado = textoGerado.strip();
+        return new ResultadoLembrete(textoGerado, aprovado, false);
     }
 
     /**
-     * Chamada ao cliente de IA com timeout. Neste projeto o bean padrão é o
-     * simulador local, sem custo ou credenciais. Um adaptador de provedor pode
-     * implementar LembreteIaClient sem mudar o circuit breaker ou o fallback.
+     * Chamada ao cliente de IA com timeout (ia.timeout-ms). O cliente ativo e
+     * definido por ia.llm.provider (simulador ou anthropic); circuit breaker,
+     * guardrail e fallback independem do provedor.
      */
-    private String chamarModeloComTimeout(String nomeTutor, String nomePet, String dataHoraFmt, String veterinario)
+    private String chamarModeloComTimeout(DadosLembrete dados)
             throws TimeoutException, ExecutionException, InterruptedException {
-        Future<String> future = executor.submit(() -> clienteIa.gerar(nomeTutor, nomePet, dataHoraFmt, veterinario));
+        Future<String> future = executor.submit(() -> clienteIa.gerar(dados));
         try { return future.get(props.getTimeoutMs(), TimeUnit.MILLISECONDS); }
         catch (TimeoutException e) { timeouts.increment(); future.cancel(true); throw e; }
-    }
-
-    private boolean guardrailAprova(String texto, String nomeTutor, String nomePet, String dataHoraFmt) {
-        if (texto == null) return false;
-        return texto.contains(nomeTutor) && texto.contains(nomePet) && texto.contains(dataHoraFmt);
-    }
-
-    private String montarTemplateFallback(String nomeTutor, String nomePet, String dataHoraFmt, String veterinario) {
-        return String.format(
-                "Ola %s, lembramos que %s tem consulta agendada com %s em %s. Contamos com voces!",
-                nomeTutor, nomePet, veterinario, dataHoraFmt);
     }
 
     private synchronized boolean adquirirPermissao() {
