@@ -79,13 +79,15 @@ disco dessa instancia. Pontos de atencao para producao na AWS:
   `application.properties`/`pom.xml` — o restante do codigo (entidades,
   repositories, services) nao precisa mudar, pois usa Spring Data JPA.
 
-## Segredos (futuras chaves de API de IA)
+## Segredos (chave da API de IA)
 
-Quando a integracao real com um provedor de IA (ex.: Anthropic ou OpenAI) for
-implementada em `service/ia/*.java`, a chave de API **nao deve** ir no
-`application.properties` do repositorio. Recomenda-se usar o **AWS Systems
-Manager Parameter Store** (ou **Secrets Manager**) e injetar o valor como
-variavel de ambiente no Elastic Beanstalk/EC2 no momento do deploy.
+A integracao com LLM (`AnthropicLembreteIaClient`) le a chave somente da
+variavel de ambiente `LLM_API_KEY`; ela **nao deve** ir no
+`application.properties` do repositorio. Recomenda-se guardar a chave no
+**AWS Systems Manager Parameter Store** (ou **Secrets Manager**) e injeta-la
+como variavel de ambiente no Elastic Beanstalk/EC2 no deploy, junto com
+`LLM_PROVIDER=anthropic` (e, se necessario, `LLM_MODEL`). Sem a chave, a
+aplicacao sobe normalmente e os lembretes saem pelo template de fallback.
 
 ## Resumo dos custos (nivel MVP)
 

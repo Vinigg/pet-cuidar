@@ -1,5 +1,6 @@
 package com.petcuidar.model;
 
+import com.petcuidar.exception.OperacaoNaoPermitidaException;
 import com.petcuidar.exception.TransicaoEstadoInvalidaException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,5 +55,21 @@ public class ConsultaStateMachine {
             throw new TransicaoEstadoInvalidaException("A consulta ainda esta dentro do periodo de tolerancia.");
         }
         consulta.aplicarStatusValidado(destino);
+    }
+
+    /**
+     * Reagendar altera apenas a data/hora, sem transicao de status. Fica
+     * restrito aos estados nao finais e, como o cancelamento, a antes do
+     * horario original - depois dele a consulta e candidata a NAO_COMPARECEU
+     * e mover o horario apagaria esse desfecho do historico de no-show.
+     */
+    public void validarReagendamento(Consulta consulta) {
+        StatusConsulta status = consulta.getStatus();
+        if (status == null || TRANSICOES.get(status).isEmpty()) {
+            throw new OperacaoNaoPermitidaException("Consultas em estado final nao podem ser reagendadas.");
+        }
+        if (!LocalDateTime.now(clock).isBefore(consulta.getDataHora())) {
+            throw new OperacaoNaoPermitidaException("O reagendamento so e permitido antes do horario da consulta.");
+        }
     }
 }

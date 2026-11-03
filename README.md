@@ -61,13 +61,24 @@ em `REACT_APP_API_URL` (`.env`).
 
 ## Sobre a integracao de IA neste repositorio
 
-As chamadas a um provedor de IA (geracao de lembrete e resumo de historico)
-estao **simuladas localmente** em `service/ia/*.java`, para que o projeto rode
-sem exigir chaves de API. A logica de timeout, guardrail de validacao,
-fallback deterministico e circuit breaker esta implementada de verdade — so a
-chamada externa ao modelo de linguagem e um stub, comentado no codigo indicando
-onde entraria a chamada real (ex.: API da Anthropic ou da OpenAI via
-RestTemplate/WebClient).
+A geracao de lembretes tem integracao real com LLM (API da Anthropic, SDK
+oficial `anthropic-java`), ativada por variavel de ambiente. Sem configuracao,
+o backend usa um **simulador local** (`LembreteIaSimulator`), que nao e uma
+integracao com LLM e serve para rodar o projeto sem chaves. Em qualquer modo,
+timeout, circuit breaker, guardrail deterministico e template de fallback
+estao implementados: falha da IA nunca impede o envio do lembrete.
+
+| Variavel | Padrao | Descricao |
+|---|---|---|
+| `LLM_PROVIDER` | `simulador` | `anthropic` para usar o LLM real |
+| `LLM_API_KEY` | (vazio) | Chave da API. Nunca versionar |
+| `LLM_MODEL` | `claude-opus-5-5` | Modelo |
+| `LLM_EFFORT` | `low` | Nivel de esforco do modelo |
+| `LLM_MAX_TOKENS` | `2048` | Teto de tokens da resposta |
+| `LLM_BASE_URL` | `https://api.anthropic.com` | Endpoint |
+
+Detalhes em `docs/resiliencia-ia.md`. O resumo de historico do pet
+(`ResumoHistoricoService`) continua simulado.
 
 ## Endpoints principais da API
 
@@ -77,17 +88,24 @@ RestTemplate/WebClient).
 | GET | `/veterinarios` | Lista veterinarios |
 | GET | `/veterinarios/{id}/disponibilidade?data=` | Horarios livres/ocupados no dia |
 | POST | `/consultas` | Cria agendamento (valida conflito de horario) |
-| PATCH | `/consultas/{id}/status` | Transiciona status da consulta conforme a máquina de estados |
+| PATCH | `/consultas/{id}/status` | Transiciona status (inclui confirmar e cancelar) conforme a máquina de estados |
+| PATCH | `/consultas/{id}/reagendamento` | Altera data/hora revalidando disponibilidade e conflito |
 | GET | `/consultas?data=` | Lista consultas do dia (painel da recepcionista) |
 | GET | `/consultas/{id}/predicao-no-show` | Score de risco de falta + motivo |
-| POST | `/consultas/{id}/lembrete` | Gera e "envia" o lembrete (IA + fallback) |
+| POST | `/consultas/{id}/lembrete` | Gera e "envia" o lembrete (IA + guardrail + fallback; 409 se cancelada) |
 | GET | `/pets/{id}/historico` | Historico completo do pet |
 | GET | `/pets/{id}/historico/resumo` | Resumo gerado por IA + link do historico |
+
+Fluxos de status, cancelamento e reagendamento: `docs/consulta-estados.md`.
+Exemplos de requisicoes: `backend/requests/consultas-lembretes.http`.
 
 ## Limitacoes conhecidas do MVP
 
 - Sem autenticacao/login implementados (o documento de arquitetura previa JWT
-  para recepcionista/veterinario — fica como proxima etapa).
+  para recepcionista/veterinario — fica como proxima etapa). Por isso as
+  operacoes "da recepcao" (status, cancelamento, reagendamento) nao estao
+  restritas por perfil.
+- Nao ha job automatico de lembretes (PC-029); o envio e disparado pela API.
 - SQLite e um banco em arquivo unico: adequado para o MVP e para demonstracao,
   mas nao recomendado para multiplas instancias do back-end rodando em
   paralelo (ver `DEPLOY.md`).
@@ -98,7 +116,8 @@ RestTemplate/WebClient).
 
 ## Validando o cadastro de tutor e pets
 
-Em `backend/`, execute `mvn test`. Os testes de cadastro usam um arquivo
+Em `backend/`, execute `mvn test`. Use JDK 17 ou 21: o Lombok gerenciado pelo
+Spring Boot 3.2.5 nao compila com JDK 25. Os testes de cadastro usam um arquivo
 SQLite exclusivo em `target/`, sem alterar o banco de desenvolvimento.
 Depois inicie a API com `mvn spring-boot:run`.
 

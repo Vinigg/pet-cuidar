@@ -1,0 +1,41 @@
+@baseUrl = http://localhost:8080
+# Troque os ids e as datas (futuras, de 30 em 30 min entre 08:00 e 17:30).
+
+### PC-027 - confirmar consulta: 200
+PATCH {{baseUrl}}/consultas/1/status
+Content-Type: application/json
+
+{ "status": "CONFIRMADA" }
+
+### PC-027 - status inexistente: 400
+PATCH {{baseUrl}}/consultas/1/status
+Content-Type: application/json
+
+{ "status": "XYZ" }
+
+### PC-027 - consulta inexistente: 404
+PATCH {{baseUrl}}/consultas/9999/status
+Content-Type: application/json
+
+{ "status": "CONFIRMADA" }
+
+### PC-027 - registrar atendimento (depois disso, nenhuma outra transicao: 409)
+PATCH {{baseUrl}}/consultas/1/status
+Content-Type: application/json
+
+{ "status": "REALIZADA" }
+
+### PC-028 - cancelar (somente AGENDADA/CONFIRMADA antes do horario): 200 ou 409
+PATCH {{baseUrl}}/consultas/2/status
+Content-Type: application/json
+
+{ "status": "CANCELADA" }
+
+### PC-028 - reagendar: 200 (400 data invalida, 404 inexistente, 409 ocupado/estado final)
+PATCH {{baseUrl}}/consultas/3/reagendamento
+Content-Type: application/json
+
+{ "dataHora": "2026-12-10T14:30:00" }
+
+### PC-030/PC-032 - gerar lembrete: 200 (usouFallback indica template); 409 se cancelada
+POST {{baseUrl}}/consultas/3/lembrete

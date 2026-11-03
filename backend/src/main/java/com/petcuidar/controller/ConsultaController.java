@@ -41,6 +41,12 @@ public class ConsultaController {
 
     public record StatusRequest(@NotNull com.petcuidar.model.StatusConsulta status) {}
 
+    // PATCH /consultas/{id}/reagendamento  {"dataHora":"2026-11-20T10:00:00"}  (PC-028)
+    @PatchMapping("/{id}/reagendamento")
+    public ConsultaResponseDTO reagendar(@PathVariable Long id, @Valid @RequestBody ReagendamentoRequestDTO request) {
+        return consultaService.reagendar(id, request.dataHora());
+    }
+
     @GetMapping("/{id}/predicao-no-show")
     public PredicaoNoShowDTO predicaoNoShow(@PathVariable Long id) {
         return consultaService.obterPredicaoNoShow(id);
