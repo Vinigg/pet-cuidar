@@ -3,6 +3,8 @@ package com.petcuidar.service.ia;
 import com.petcuidar.config.IaProperties;
 import com.petcuidar.model.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.CountDownLatch;
@@ -45,6 +47,29 @@ class LembreteGeneratorServiceTest {
             assertEquals(1, invalid.obterMetricas().respostasInvalidas());
             assertEquals(0, invalid.obterMetricas().sucessos());
         } finally { invalid.encerrarExecutor(); }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Bia Rex consulta 28/10/2026 as 15:30",
+            "Ana Luna consulta 28/10/2026 as 15:30",
+            "Ana Rex consulta 29/10/2026 as 15:30",
+            "Ana Rex consulta 2026-10-28 15:30",
+            "Lembrete de consulta veterinaria"
+    })
+    void guardrailRejeitaNomeHorarioAusenteOuFormatoDivergente(String textoInvalido) {
+        LembreteGeneratorService service = new LembreteGeneratorService(
+                properties(500, 3, 30000), (tutor, pet, data, vet) -> textoInvalido);
+        try {
+            var result = service.gerar(consulta());
+            assertTrue(result.usouFallback);
+            assertEquals(textoInvalido, result.textoGeradoIa);
+            assertTrue(result.textoValidado.contains("Ana"));
+            assertTrue(result.textoValidado.contains("Rex"));
+            assertTrue(result.textoValidado.contains("28/10/2026 as 15:30"));
+        } finally {
+            service.encerrarExecutor();
+        }
     }
 
     @Test void falhasAbremCircuitoEBloqueiamNovasChamadas() {

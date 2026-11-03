@@ -44,6 +44,8 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErro> handleConcorrencia(OptimisticLockingFailureException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErro(409,
                 "Este horario acabou de ser reservado por outra requisicao. Escolha outro horario."));
+    }
+
     @ExceptionHandler(CadastroConflitanteException.class)
     public ResponseEntity<ApiErro> handleCadastroConflitante(CadastroConflitanteException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErro(409, ex.getMessage()));

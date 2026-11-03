@@ -5,7 +5,6 @@ import com.petcuidar.exception.ConflitoHorarioException;
 import com.petcuidar.exception.RecursoNaoEncontradoException;
 import com.petcuidar.model.*;
 import com.petcuidar.repository.*;
-import com.petcuidar.service.ia.LembreteGeneratorService;
 import com.petcuidar.service.ia.NoShowPredictorService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,28 +28,25 @@ public class ConsultaService {
     private final ConsultaRepository consultaRepository;
     private final PetRepository petRepository;
     private final VeterinarioRepository veterinarioRepository;
-    private final LembreteRepository lembreteRepository;
     private final PredicaoNoShowRepository predicaoRepository;
-    private final LembreteGeneratorService lembreteGeneratorService;
     private final NoShowPredictorService noShowPredictorService;
     private final ConsultaStateMachine consultaStateMachine;
+    private final LembreteDeliveryService lembreteDeliveryService;
 
     public ConsultaService(ConsultaRepository consultaRepository,
                             PetRepository petRepository,
                             VeterinarioRepository veterinarioRepository,
-                            LembreteRepository lembreteRepository,
                             PredicaoNoShowRepository predicaoRepository,
-                            LembreteGeneratorService lembreteGeneratorService,
                             NoShowPredictorService noShowPredictorService,
-                            ConsultaStateMachine consultaStateMachine) {
+                            ConsultaStateMachine consultaStateMachine,
+                            LembreteDeliveryService lembreteDeliveryService) {
         this.consultaRepository = consultaRepository;
         this.petRepository = petRepository;
         this.veterinarioRepository = veterinarioRepository;
-        this.lembreteRepository = lembreteRepository;
         this.predicaoRepository = predicaoRepository;
-        this.lembreteGeneratorService = lembreteGeneratorService;
         this.noShowPredictorService = noShowPredictorService;
         this.consultaStateMachine = consultaStateMachine;
+        this.lembreteDeliveryService = lembreteDeliveryService;
     }
 
     // GET /veterinarios/{id}/disponibilidade
@@ -123,32 +119,25 @@ public class ConsultaService {
         Consulta consulta = buscarConsulta(consultaId);
         PredicaoNoShowDTO dto = noShowPredictorService.calcular(consulta);
 
+        if (dto.getScore() == null || "INDISPONIVEL".equals(dto.getCategoria())) {
+            return dto;
+        }
+
         PredicaoNoShow entidade = predicaoRepository.findByConsultaId(consultaId).orElseGet(PredicaoNoShow::new);
+        LocalDateTime dataCalculo = LocalDateTime.now();
         entidade.setConsulta(consulta);
         entidade.setScore(dto.getScore());
         entidade.setMotivo(dto.getMotivo());
-        entidade.setDataCalculo(LocalDateTime.now());
+        entidade.setDataCalculo(dataCalculo);
         predicaoRepository.save(entidade);
 
-        return dto;
+        return new PredicaoNoShowDTO(
+                dto.getScore(), dto.getCategoria(), dto.getMotivo(), dataCalculo);
     }
 
     // POST /consultas/{id}/lembrete (US3.1)
-    @Transactional
     public LembreteResponseDTO dispararLembrete(Long consultaId) {
-        Consulta consulta = buscarConsulta(consultaId);
-
-        LembreteGeneratorService.ResultadoLembrete resultado = lembreteGeneratorService.gerar(consulta);
-
-        Lembrete lembrete = lembreteRepository.findByConsultaId(consultaId).orElseGet(Lembrete::new);
-        lembrete.setConsulta(consulta);
-        lembrete.setTextoGeradoIa(resultado.textoGeradoIa);
-        lembrete.setTextoValidado(resultado.textoValidado);
-        lembrete.setUsouFallback(resultado.usouFallback);
-        lembrete.setStatusEnvio(StatusEnvioLembrete.ENVIADO);
-        lembrete.setDataEnvio(LocalDateTime.now());
-
-        return LembreteResponseDTO.from(lembreteRepository.save(lembrete));
+        return lembreteDeliveryService.disparar(consultaId);
     }
 
     private void validarHorario(LocalDateTime dataHora) {
