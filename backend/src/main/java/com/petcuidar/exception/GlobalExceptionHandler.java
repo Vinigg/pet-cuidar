@@ -1,5 +1,6 @@
 package com.petcuidar.exception;
 
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -39,6 +40,10 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErro(409, ex.getMessage()));
     }
 
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErro> handleConcorrencia(OptimisticLockingFailureException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErro(409,
+                "Este horario acabou de ser reservado por outra requisicao. Escolha outro horario."));
     @ExceptionHandler(CadastroConflitanteException.class)
     public ResponseEntity<ApiErro> handleCadastroConflitante(CadastroConflitanteException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErro(409, ex.getMessage()));

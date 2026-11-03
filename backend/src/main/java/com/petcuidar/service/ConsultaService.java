@@ -23,6 +23,8 @@ public class ConsultaService {
     private static final LocalTime ABERTURA = LocalTime.of(8, 0);
     private static final LocalTime FECHAMENTO = LocalTime.of(18, 0);
     private static final int INTERVALO_MINUTOS = 30;
+    private static final List<StatusConsulta> STATUS_QUE_LIBERAM_HORARIO =
+            List.of(StatusConsulta.CANCELADA, StatusConsulta.NAO_COMPARECEU);
 
     private final ConsultaRepository consultaRepository;
     private final PetRepository petRepository;
@@ -56,11 +58,10 @@ public class ConsultaService {
         veterinarioRepository.findById(veterinarioId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Veterinario nao encontrado: id " + veterinarioId));
 
-        List<Consulta> doDia = consultaRepository.findByDataHoraBetweenOrderByDataHoraAsc(
-                data.atTime(ABERTURA), data.atTime(FECHAMENTO));
-
-        List<LocalDateTime> ocupados = doDia.stream()
-                .filter(c -> c.getVeterinario().getId().equals(veterinarioId))
+        List<LocalDateTime> ocupados = consultaRepository
+                .findByVeterinarioIdAndDataHoraBetweenAndStatusNotInOrderByDataHoraAsc(
+                        veterinarioId, data.atTime(ABERTURA), data.atTime(FECHAMENTO), STATUS_QUE_LIBERAM_HORARIO)
+                .stream()
                 .map(Consulta::getDataHora)
                 .collect(Collectors.toList());
 
@@ -77,13 +78,16 @@ public class ConsultaService {
     // POST /consultas (US2.1) - impede dois agendamentos no mesmo horario/veterinario
     @Transactional
     public ConsultaResponseDTO criar(ConsultaRequestDTO dto) {
+        validarHorario(dto.getDataHora());
+
         Pet pet = petRepository.findById(dto.getPetId())
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Pet nao encontrado: id " + dto.getPetId()));
-        Veterinario veterinario = veterinarioRepository.findById(dto.getVeterinarioId())
+        Veterinario veterinario = veterinarioRepository.buscarParaAgendamento(dto.getVeterinarioId())
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Veterinario nao encontrado: id " + dto.getVeterinarioId()));
 
         boolean conflito = !consultaRepository
-                .findByVeterinarioIdAndDataHora(dto.getVeterinarioId(), dto.getDataHora())
+                .findByVeterinarioIdAndDataHoraAndStatusNotIn(
+                        dto.getVeterinarioId(), dto.getDataHora(), STATUS_QUE_LIBERAM_HORARIO)
                 .isEmpty();
         if (conflito) {
             throw new ConflitoHorarioException(
@@ -145,6 +149,20 @@ public class ConsultaService {
         lembrete.setDataEnvio(LocalDateTime.now());
 
         return LembreteResponseDTO.from(lembreteRepository.save(lembrete));
+    }
+
+    private void validarHorario(LocalDateTime dataHora) {
+        LocalTime hora = dataHora.toLocalTime();
+        boolean foraDoExpediente = hora.isBefore(ABERTURA) || !hora.isBefore(FECHAMENTO);
+        boolean foraDoIntervalo = hora.getMinute() % INTERVALO_MINUTOS != 0
+                || hora.getSecond() != 0 || hora.getNano() != 0;
+        if (foraDoExpediente || foraDoIntervalo) {
+            throw new IllegalArgumentException(
+                    "Horario invalido: use horarios de 30 em 30 minutos entre 08:00 e 17:30.");
+        }
+        if (dataHora.isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Nao e possivel agendar uma consulta no passado.");
+        }
     }
 
     private Consulta buscarConsulta(Long id) {

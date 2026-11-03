@@ -1,7 +1,9 @@
 package com.petcuidar.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -21,4 +23,10 @@ public class Veterinario {
     private String nome;
 
     private String especialidade;
+
+    @Version
+    @JsonIgnore
+    @Setter(AccessLevel.NONE)
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private Long versao;
 }
