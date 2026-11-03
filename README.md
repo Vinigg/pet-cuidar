@@ -59,28 +59,15 @@ em `REACT_APP_API_URL` (`.env`).
 4. Aba **Historico do pet**: consulte o resumo gerado por IA e o historico
    completo do pet.
 
-## Integracoes de IA, predicao e e-mail
+## Sobre a integracao de IA neste repositorio
 
-O modo local continua seguro e sem credenciais: `IA_PROVIDER=simulator` e
-`EMAIL_PROVIDER=local`. Para uma validacao explicita com servicos externos:
-
-- `IA_PROVIDER=openai`, `LLM_API_KEY`, `LLM_MODEL` e, se necessario,
-  `LLM_BASE_URL` habilitam uma API de texto compativel com OpenAI.
-- `NOSHOW_PREDICTOR_BASE_URL` aponta para o microservico FastAPI em
-  `microservico-predicao/`; falha, timeout ou resposta invalida retornam score
-  indisponivel, nunca um risco inventado.
-- `EMAIL_PROVIDER=resend`, `RESEND_API_KEY` e `EMAIL_FROM` habilitam o envio
-  transacional. O fluxo usa o texto validado, chave de idempotencia e ate tres
-  tentativas com backoff exponencial.
-
-O job de lembretes fica desabilitado por padrao enquanto o e-mail usa o
-simulador local. Com um provedor real configurado, defina
-`LEMBRETE_JOB_ENABLED=true`; ele procura consultas nas proximas 24 horas no
-fuso `America/Recife`. Consultas canceladas e lembretes ja processados nao
-sao enviados novamente. Todas as credenciais ficam em variaveis de ambiente;
-nenhuma chave deve ser adicionada ao Git.
-
-Detalhes, contratos e comandos de teste: [docs/integracoes-luan.md](docs/integracoes-luan.md).
+As chamadas a um provedor de IA (geracao de lembrete e resumo de historico)
+estao **simuladas localmente** em `service/ia/*.java`, para que o projeto rode
+sem exigir chaves de API. A logica de timeout, guardrail de validacao,
+fallback deterministico e circuit breaker esta implementada de verdade — so a
+chamada externa ao modelo de linguagem e um stub, comentado no codigo indicando
+onde entraria a chamada real (ex.: API da Anthropic ou da OpenAI via
+RestTemplate/WebClient).
 
 ## Endpoints principais da API
 
@@ -93,7 +80,7 @@ Detalhes, contratos e comandos de teste: [docs/integracoes-luan.md](docs/integra
 | PATCH | `/consultas/{id}/status` | Transiciona status da consulta conforme a máquina de estados |
 | GET | `/consultas?data=` | Lista consultas do dia (painel da recepcionista) |
 | GET | `/consultas/{id}/predicao-no-show` | Score de risco de falta + motivo |
-| POST | `/consultas/{id}/lembrete` | Gera, valida e envia o lembrete de forma idempotente |
+| POST | `/consultas/{id}/lembrete` | Gera e "envia" o lembrete (IA + fallback) |
 | GET | `/pets/{id}/historico` | Historico completo do pet |
 | GET | `/pets/{id}/historico/resumo` | Resumo gerado por IA + link do historico |
 
@@ -104,10 +91,9 @@ Detalhes, contratos e comandos de teste: [docs/integracoes-luan.md](docs/integra
 - SQLite e um banco em arquivo unico: adequado para o MVP e para demonstracao,
   mas nao recomendado para multiplas instancias do back-end rodando em
   paralelo (ver `DEPLOY.md`).
-- Autenticacao/autorizacao por JWT ainda nao foi implementada; portanto os
-  endpoints devem permanecer em ambiente controlado ate essa frente ser entregue.
-- O adapter Resend e o adapter de LLM estao implementados, mas so ficam
-  homologados depois de uma validacao explicita com contas e credenciais reais.
+- O envio real de e-mail nao esta implementado; `dispararLembrete` grava o
+  texto validado e marca o status como enviado, sem integrar a um provedor de
+  e-mail de fato.
 
 
 ## Validando o cadastro de tutor e pets

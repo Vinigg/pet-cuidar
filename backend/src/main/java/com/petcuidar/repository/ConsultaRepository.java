@@ -22,13 +22,8 @@ public interface ConsultaRepository extends JpaRepository<Consulta, Long> {
     // Usado pelo painel diario da recepcionista (US2.2)
     List<Consulta> findByDataHoraBetweenOrderByDataHoraAsc(LocalDateTime inicio, LocalDateTime fim);
 
-    List<Consulta> findByDataHoraBetweenAndStatusInOrderByDataHoraAsc(
-            LocalDateTime inicio, LocalDateTime fim, Collection<StatusConsulta> status);
-
-    // Consultas do pet e do tutor usadas pelas integracoes e pelo historico.
+    // Usado para estimar o score de no-show a partir do historico do pet
     List<Consulta> findByPetIdAndStatus(Long petId, StatusConsulta status);
 
     List<Consulta> findByPetIdOrderByDataHoraDesc(Long petId);
-
-    List<Consulta> findByPetTutorIdOrderByDataHoraDesc(Long tutorId);
 }

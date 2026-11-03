@@ -79,20 +79,13 @@ disco dessa instancia. Pontos de atencao para producao na AWS:
   `application.properties`/`pom.xml` — o restante do codigo (entidades,
   repositories, services) nao precisa mudar, pois usa Spring Data JPA.
 
-## Segredos e integracoes externas
+## Segredos (futuras chaves de API de IA)
 
-Os adapters de LLM e Resend estao implementados, mas desabilitados por padrao.
-As chaves **nao devem** ir no `application.properties` nem no Git. Use o **AWS
-Systems Manager Parameter Store** (ou **Secrets Manager**) e injete no ambiente:
-
-- `IA_PROVIDER=openai`, `LLM_API_KEY`, `LLM_MODEL` e `LLM_BASE_URL`;
-- `EMAIL_PROVIDER=resend`, `RESEND_API_KEY` e `EMAIL_FROM`;
-- `NOSHOW_PREDICTOR_BASE_URL`, apontando para o FastAPI publicado;
-- `LEMBRETE_JOB_ENABLED=true`, somente depois de validar o provedor de e-mail;
-- `LEMBRETE_TIME_ZONE`, quando o deploy nao operar em `America/Recife`.
-
-Os provedores externos continuam nao homologados enquanto nao houver evidencia
-de uma chamada real controlada e dos respectivos limites/contas.
+Quando a integracao real com um provedor de IA (ex.: Anthropic ou OpenAI) for
+implementada em `service/ia/*.java`, a chave de API **nao deve** ir no
+`application.properties` do repositorio. Recomenda-se usar o **AWS Systems
+Manager Parameter Store** (ou **Secrets Manager**) e injetar o valor como
+variavel de ambiente no Elastic Beanstalk/EC2 no momento do deploy.
 
 ## Resumo dos custos (nivel MVP)
 

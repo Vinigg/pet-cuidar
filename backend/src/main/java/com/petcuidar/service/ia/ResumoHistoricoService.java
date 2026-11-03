@@ -6,16 +6,7 @@ import com.petcuidar.model.Pet;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import jakarta.annotation.PreDestroy;
-import com.petcuidar.config.IaProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.stream.Collectors;
 
 /**
  * Resumo do historico do pet para o veterinario (US5.1).
@@ -30,76 +21,33 @@ import org.slf4j.LoggerFactory;
 @Service
 public class ResumoHistoricoService {
 
-    private static final Logger log = LoggerFactory.getLogger(ResumoHistoricoService.class);
-    private final ResumoIaClient clienteIa;
-    private final IaProperties props;
-    private final ExecutorService executor = Executors.newFixedThreadPool(2, r -> {
-        Thread t = new Thread(r, "ia-resumo");
-        t.setDaemon(true);
-        return t;
-    });
-
-    public ResumoHistoricoService(ResumoIaClient clienteIa, IaProperties props) {
-        this.clienteIa = clienteIa;
-        this.props = props;
-    }
-
     public ResumoHistoricoDTO gerar(Pet pet, List<HistoricoAtendimento> historico) {
-        List<String> descricoes = historico.stream()
-                .map(HistoricoAtendimento::getDescricao)
-                .filter(descricao -> descricao != null && !descricao.isBlank())
-                .toList();
-        ResultadoResumo resultado = gerarComFallback(pet, descricoes);
-        String resumoGerado = resultado.texto();
+        String resumoGerado = simularResumoIa(pet, historico);
 
         StringBuilder resumoFinal = new StringBuilder(resumoGerado);
-        String itensCriticos = pet.getAlergiasCriticas() == null ? "" : pet.getAlergiasCriticas();
-        if (!itensCriticos.isBlank()) {
-            resumoFinal.append(" ATENCAO - itens criticos: ").append(itensCriticos).append(".");
+        if (pet.getAlergiasCriticas() != null && !pet.getAlergiasCriticas().isBlank()) {
+            resumoFinal.append(" ATENCAO - itens criticos: ").append(pet.getAlergiasCriticas()).append(".");
         }
 
         String link = "/pets/" + pet.getId() + "/historico";
-        return new ResumoHistoricoDTO(
-                resumoFinal.toString(), itensCriticos, link, resultado.usouFallback());
+        return new ResumoHistoricoDTO(resumoFinal.toString(), link);
     }
 
-    private ResultadoResumo gerarComFallback(Pet pet, List<String> descricoes) {
-        String itensCriticos = pet.getAlergiasCriticas() == null ? "" : pet.getAlergiasCriticas();
-        Future<String> future = executor.submit(
-                () -> clienteIa.resumir(pet.getNome(), descricoes, itensCriticos));
-        try {
-            String resumo = future.get(props.getTimeoutMs(), TimeUnit.MILLISECONDS);
-            if (resumo == null || resumo.isBlank()) {
-                throw new IllegalStateException("Resumo vazio");
-            }
-            return new ResultadoResumo(resumo, false);
-        } catch (TimeoutException e) {
-            future.cancel(true);
-            log.warn("Timeout ao gerar resumo do historico; usando fallback deterministico");
-            return new ResultadoResumo(fallback(pet, descricoes), true);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return new ResultadoResumo(fallback(pet, descricoes), true);
-        } catch (ExecutionException | RuntimeException e) {
-            log.warn("Falha ao gerar resumo do historico: {}; usando fallback deterministico",
-                    e.getClass().getSimpleName());
-            return new ResultadoResumo(fallback(pet, descricoes), true);
-        }
-    }
-
-    private String fallback(Pet pet, List<String> descricoes) {
-        if (descricoes.isEmpty()) {
+    /**
+     * Simulacao local do resumo que um LLM geraria a partir do prompt
+     * "Gerar resumo do historico do pet" (documento, Secao 5.1). Em producao,
+     * este metodo chamaria a API do provedor de IA passando a lista de
+     * atendimentos anteriores como contexto.
+     */
+    private String simularResumoIa(Pet pet, List<HistoricoAtendimento> historico) {
+        if (historico.isEmpty()) {
             return pet.getNome() + " ainda nao possui atendimentos anteriores registrados.";
         }
-        String ultimos = String.join("; ", descricoes.stream().limit(3).toList());
+        String ultimos = historico.stream()
+                .limit(3)
+                .map(HistoricoAtendimento::getDescricao)
+                .collect(Collectors.joining("; "));
         return String.format("%s ja teve %d atendimento(s) registrados. Mais recentes: %s.",
-                pet.getNome(), descricoes.size(), ultimos);
+                pet.getNome(), historico.size(), ultimos);
     }
-
-    @PreDestroy
-    public void encerrarExecutor() {
-        executor.shutdownNow();
-    }
-
-    private record ResultadoResumo(String texto, boolean usouFallback) {}
 }
