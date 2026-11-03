@@ -13,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -48,5 +49,18 @@ class ConsultaControllerHttpTest {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.timestamp").exists());
         verifyNoInteractions(consultaService);
+    }
+
+    @Test void detalheComIdNaoNumericoResponde400SemChamarService() throws Exception {
+        mvc.perform(get("/consultas/abc"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.timestamp").exists());
+        verifyNoInteractions(consultaService);
+    }
+
+    @Test void detalheDeConsultaInexistenteResponde404() throws Exception {
+        when(consultaService.buscarDetalhe(77L)).thenThrow(new RecursoNaoEncontradoException("Consulta nao encontrada: id 77"));
+        mvc.perform(get("/consultas/77"))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.mensagem").value("Consulta nao encontrada: id 77"));
     }
 }

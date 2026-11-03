@@ -19,6 +19,7 @@ export const listarDisponibilidade = (veterinarioId, data) =>
 // ---- Consultas ----
 export const criarConsulta = (dados) => api.post("/consultas", dados);
 export const listarConsultasDoDia = (data) => api.get("/consultas", { params: { data } });
+export const obterConsulta = (consultaId) => api.get(`/consultas/${consultaId}`);
 export const obterPredicaoNoShow = (consultaId) => api.get(`/consultas/${consultaId}/predicao-no-show`);
 export const dispararLembrete = (consultaId) => api.post(`/consultas/${consultaId}/lembrete`);
 

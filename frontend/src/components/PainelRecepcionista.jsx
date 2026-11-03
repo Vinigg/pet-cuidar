@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { listarConsultasDoDia, obterPredicaoNoShow, dispararLembrete } from "../api/api";
+import DetalhesConsulta from "./DetalhesConsulta";
 
 function hoje() {
   return new Date().toISOString().slice(0, 10);
@@ -14,6 +15,8 @@ export default function PainelRecepcionista() {
   const [statusLembrete, setStatusLembrete] = useState({});
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState(null);
+  const [consultaDetalhada, setConsultaDetalhada] = useState(null);
+  const fecharDetalhes = useCallback(() => setConsultaDetalhada(null), []);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -65,58 +68,75 @@ export default function PainelRecepcionista() {
       {carregando && <p>Carregando...</p>}
       {erro && <p className="erro">{erro}</p>}
 
-      <table className="tabela-consultas">
-        <thead>
-          <tr>
-            <th>Horario</th>
-            <th>Pet</th>
-            <th>Tutor</th>
-            <th>Veterinario</th>
-            <th>Status</th>
-            <th>Risco de falta</th>
-            <th>Lembrete</th>
-          </tr>
-        </thead>
-        <tbody>
-          {consultas.map((c) => {
-            const risco = riscos[c.id];
-            const lembreteStatus = statusLembrete[c.id];
-            return (
-              <tr key={c.id}>
-                <td>{c.dataHora.substring(11, 16)}</td>
-                <td>{c.petNome}</td>
-                <td>{c.tutorNome}</td>
-                <td>{c.veterinarioNome}</td>
-                <td>{c.status}</td>
-                <td>
-                  {risco ? (
-                    <span className={`badge ${CORES_RISCO[risco.categoria] || ""}`} title={risco.motivo}>
-                      {risco.categoria}
-                    </span>
-                  ) : (
-                    <button type="button" className="btn-link" onClick={() => verRisco(c.id)}>
-                      Calcular
-                    </button>
-                  )}
-                </td>
-                <td>
-                  <button type="button" className="btn-link" onClick={() => enviarLembrete(c.id)}>
-                    {lembreteStatus === "enviando" ? "Enviando..." : "Enviar lembrete"}
-                  </button>
-                  {lembreteStatus === "enviado" && <span className="sucesso"> ✓ enviado (IA)</span>}
-                  {lembreteStatus === "enviado-fallback" && <span className="aviso"> ✓ enviado (template)</span>}
-                  {lembreteStatus === "falhou" && <span className="erro"> falhou</span>}
-                </td>
-              </tr>
-            );
-          })}
-          {consultas.length === 0 && !carregando && (
+      <div className="tabela-rolagem">
+        <table className="tabela-consultas">
+          <thead>
             <tr>
-              <td colSpan="7">Nenhuma consulta agendada para esta data.</td>
+              <th>Horario</th>
+              <th>Pet</th>
+              <th>Tutor</th>
+              <th>Veterinario</th>
+              <th>Status</th>
+              <th>Risco de falta</th>
+              <th>Lembrete</th>
+              <th>Detalhes</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {consultas.map((c) => {
+              const risco = riscos[c.id];
+              const lembreteStatus = statusLembrete[c.id];
+              return (
+                <tr key={c.id}>
+                  <td>{c.dataHora.substring(11, 16)}</td>
+                  <td>{c.petNome}</td>
+                  <td>{c.tutorNome}</td>
+                  <td>{c.veterinarioNome}</td>
+                  <td>{c.status}</td>
+                  <td>
+                    {risco ? (
+                      <span className={`badge ${CORES_RISCO[risco.categoria] || ""}`} title={risco.motivo}>
+                        {risco.categoria}
+                      </span>
+                    ) : (
+                      <button type="button" className="btn-link" onClick={() => verRisco(c.id)}>
+                        Calcular
+                      </button>
+                    )}
+                  </td>
+                  <td>
+                    <button type="button" className="btn-link" onClick={() => enviarLembrete(c.id)}>
+                      {lembreteStatus === "enviando" ? "Enviando..." : "Enviar lembrete"}
+                    </button>
+                    {lembreteStatus === "enviado" && <span className="sucesso"> ✓ enviado (IA)</span>}
+                    {lembreteStatus === "enviado-fallback" && <span className="aviso"> ✓ enviado (template)</span>}
+                    {lembreteStatus === "falhou" && <span className="erro"> falhou</span>}
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn-link"
+                      aria-label={`Ver detalhes da consulta de ${c.petNome} as ${c.dataHora.substring(11, 16)}`}
+                      onClick={() => setConsultaDetalhada(c.id)}
+                    >
+                      Ver detalhes
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {consultas.length === 0 && !carregando && (
+              <tr>
+                <td colSpan="8">Nenhuma consulta agendada para esta data.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {consultaDetalhada !== null && (
+        <DetalhesConsulta consultaId={consultaDetalhada} onFechar={fecharDetalhes} />
+      )}
     </div>
   );
 }

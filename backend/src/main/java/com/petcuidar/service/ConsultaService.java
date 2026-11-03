@@ -104,6 +104,17 @@ public class ConsultaService {
                 .collect(Collectors.toList());
     }
 
+    // GET /consultas/{id} - detalhamento somente leitura (nao altera a consulta)
+    @Transactional(readOnly = true)
+    public ConsultaDetalheDTO buscarDetalhe(Long consultaId) {
+        if (consultaId == null || consultaId <= 0) {
+            throw new IllegalArgumentException("Identificador de consulta invalido.");
+        }
+        return consultaRepository.buscarDetalhe(consultaId)
+                .map(ConsultaDetalheDTO::from)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Consulta nao encontrada: id " + consultaId));
+    }
+
     @Transactional
     public ConsultaResponseDTO atualizarStatus(Long consultaId, StatusConsulta status) {
         Consulta consulta = buscarConsulta(consultaId);

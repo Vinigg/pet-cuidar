@@ -34,6 +34,12 @@ public class ConsultaController {
         return consultaService.listarDoDia(data);
     }
 
+    // GET /consultas/{id} -> detalhamento da consulta com pet, tutor e veterinario
+    @GetMapping("/{id}")
+    public ConsultaDetalheDTO buscarDetalhe(@PathVariable Long id) {
+        return consultaService.buscarDetalhe(id);
+    }
+
     @PatchMapping("/{id}/status")
     public ConsultaResponseDTO atualizarStatus(@PathVariable Long id, @Valid @RequestBody StatusRequest request) {
         return consultaService.atualizarStatus(id, request.status());

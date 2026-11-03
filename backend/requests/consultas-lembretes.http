@@ -1,6 +1,15 @@
 @baseUrl = http://localhost:8080
 # Troque os ids e as datas (futuras, de 30 em 30 min entre 08:00 e 17:30).
 
+### Detalhes da consulta (pet, tutor, veterinario): 200
+GET {{baseUrl}}/consultas/1
+
+### Detalhes - consulta inexistente: 404
+GET {{baseUrl}}/consultas/9999
+
+### Detalhes - identificador invalido: 400
+GET {{baseUrl}}/consultas/abc
+
 ### PC-027 - confirmar consulta: 200
 PATCH {{baseUrl}}/consultas/1/status
 Content-Type: application/json

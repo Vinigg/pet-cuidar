@@ -91,12 +91,14 @@ Detalhes em `docs/resiliencia-ia.md`. O resumo de historico do pet
 | PATCH | `/consultas/{id}/status` | Transiciona status (inclui confirmar e cancelar) conforme a máquina de estados |
 | PATCH | `/consultas/{id}/reagendamento` | Altera data/hora revalidando disponibilidade e conflito |
 | GET | `/consultas?data=` | Lista consultas do dia (painel da recepcionista) |
+| GET | `/consultas/{id}` | Detalhes de uma consulta com pet, tutor e veterinario (somente leitura) |
 | GET | `/consultas/{id}/predicao-no-show` | Score de risco de falta + motivo |
 | POST | `/consultas/{id}/lembrete` | Gera e "envia" o lembrete (IA + guardrail + fallback; 409 se cancelada) |
 | GET | `/pets/{id}/historico` | Historico completo do pet |
 | GET | `/pets/{id}/historico/resumo` | Resumo gerado por IA + link do historico |
 
 Fluxos de status, cancelamento e reagendamento: `docs/consulta-estados.md`.
+Detalhamento da consulta (API e tela): `docs/consulta-detalhes.md`.
 Exemplos de requisicoes: `backend/requests/consultas-lembretes.http`.
 
 ## Limitacoes conhecidas do MVP
@@ -106,6 +108,9 @@ Exemplos de requisicoes: `backend/requests/consultas-lembretes.http`.
   operacoes "da recepcao" (status, cancelamento, reagendamento) nao estao
   restritas por perfil.
 - Nao ha job automatico de lembretes (PC-029); o envio e disparado pela API.
+- O CORS (`CorsConfig`) nao libera o metodo PATCH. Hoje o front-end nao usa
+  PATCH, mas uma tela futura de status/reagendamento no navegador vai precisar
+  incluir PATCH em `allowedMethods`.
 - SQLite e um banco em arquivo unico: adequado para o MVP e para demonstracao,
   mas nao recomendado para multiplas instancias do back-end rodando em
   paralelo (ver `DEPLOY.md`).

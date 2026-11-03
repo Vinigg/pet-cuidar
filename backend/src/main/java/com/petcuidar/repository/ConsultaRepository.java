@@ -3,10 +3,13 @@ package com.petcuidar.repository;
 import com.petcuidar.model.Consulta;
 import com.petcuidar.model.StatusConsulta;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface ConsultaRepository extends JpaRepository<Consulta, Long> {
 
@@ -26,4 +29,8 @@ public interface ConsultaRepository extends JpaRepository<Consulta, Long> {
     List<Consulta> findByPetIdAndStatus(Long petId, StatusConsulta status);
 
     List<Consulta> findByPetIdOrderByDataHoraDesc(Long petId);
+
+    // Detalhamento (GET /consultas/{id}): consulta, pet, tutor e veterinario em um unico SELECT
+    @Query("select c from Consulta c join fetch c.pet p join fetch p.tutor join fetch c.veterinario where c.id = :id")
+    Optional<Consulta> buscarDetalhe(@Param("id") Long id);
 }
