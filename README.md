@@ -94,3 +94,22 @@ RestTemplate/WebClient).
 - O envio real de e-mail nao esta implementado; `dispararLembrete` grava o
   texto validado e marca o status como enviado, sem integrar a um provedor de
   e-mail de fato.
+
+
+## Validando o cadastro de tutor e pets
+
+Em `backend/`, execute `mvn test`. Os testes de cadastro usam um arquivo
+SQLite exclusivo em `target/`, sem alterar o banco de desenvolvimento.
+Depois inicie a API com `mvn spring-boot:run`.
+
+Exemplos de requisicoes estao em `backend/requests/cadastro-tutor-pet.http`.
+Podem ser usados com um cliente HTTP que aceite esse formato ou copiados
+para o Postman. O cadastro valido retorna `201`, com o ID do tutor e os IDs
+dos pets; a resposta nao repete o tutor dentro de cada pet nem inclui CPF.
+
+Nome do tutor, e-mail valido e pelo menos um pet com nome sao obrigatorios.
+Pet nulo, idade negativa e alergias com mais de 1000 caracteres retornam
+`400`. CPF e opcional: vazio ou composto por espacos e salvo como `null`.
+E-mail ou CPF ja cadastrado retorna `409`, no formato padrao da API
+(`status`, `mensagem`, `timestamp`). O cadastro inteiro e transacional:
+falha ao persistir um pet desfaz tambem o tutor e os outros pets.
