@@ -1,155 +1,196 @@
-import React, { useState } from "react";
-import { cadastrarTutor } from "../api/api";
-import { formatarCpf, formatarTelefone, somenteDigitos, validarCadastro } from "../utils/validacaoCadastro";
+import React, { useState } from 'react';
+import axios from 'axios';
+import { Button, Input } from './common/UIComponents';
 
-const petVazio = { nome: "", especie: "", idade: "", alergiasCriticas: "" };
-
-export default function CadastroTutorPet() {
-  const [tutor, setTutor] = useState({ nome: "", email: "", telefone: "", cpf: "" });
-  const [pets, setPets] = useState([{ ...petVazio }]);
+export default function CadastroTutorPet({ onCadastroSucesso }) {
+  const [tutor, setTutor] = useState({ nome: '', email: '', telefone: '', cpf: '' });
+  const [pets, setPets] = useState([
+    { nome: '', especie: '', idade: '', alergiasCriticas: '' }
+  ]);
+  const [loading, setLoading] = useState(false);
   const [mensagem, setMensagem] = useState(null);
   const [erro, setErro] = useState(null);
-  const [enviando, setEnviando] = useState(false);
-  const [erros, setErros] = useState({});
 
-  const limparErro = (campo) => setErros((atuais) => ({ ...atuais, [campo]: undefined }));
-  const validarCampo = (campo) => setErros((atuais) => ({
-    ...atuais, [campo]: validarCadastro(tutor, pets)[campo],
-  }));
-  const atributosCampo = (campo) => ({
-    "aria-invalid": Boolean(erros[campo]),
-    "aria-describedby": erros[campo] ? `erro-${campo}` : undefined,
-    onBlur: () => validarCampo(campo),
-  });
-  const erroCampo = (campo) => erros[campo] && (
-    <span id={`erro-${campo}`} className="erro-campo" role="alert">{erros[campo]}</span>
-  );
-  const atualizarTutor = (campo, valor) => {
-    setTutor({ ...tutor, [campo]: valor });
-    limparErro(campo);
+  const handlePetChange = (index, campo, valor) => {
+    const novosPets = [...pets];
+    novosPets[index][campo] = valor;
+    setPets(novosPets);
   };
 
-  const atualizarPet = (index, campo, valor) => {
-    setPets(pets.map((pet, indice) => indice === index ? { ...pet, [campo]: valor } : pet));
-    limparErro(`pets.${index}.${campo}`);
+  const adicionarPet = () => {
+    setPets([...pets, { nome: '', especie: '', idade: '', alergiasCriticas: '' }]);
   };
 
-  const adicionarPet = () => setPets([...pets, { ...petVazio }]);
   const removerPet = (index) => {
-    setPets(pets.filter((_, indice) => indice !== index));
-    setErros((atuais) => Object.fromEntries(Object.entries(atuais).filter(([campo]) => !campo.startsWith("pets."))));
+    if (pets.length > 1) {
+      setPets(pets.filter((_, i) => i !== index));
+    }
   };
 
-  const enviar = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (enviando) return;
+    setLoading(true);
     setMensagem(null);
     setErro(null);
-    const novosErros = validarCadastro(tutor, pets);
-    setErros(novosErros);
-    if (Object.keys(novosErros).length) return;
-    setEnviando(true);
+
     try {
-      const payload = {
-        ...tutor,
-        nome: tutor.nome.trim(),
-        email: tutor.email.trim(),
-        cpf: somenteDigitos(tutor.cpf),
-        telefone: somenteDigitos(tutor.telefone),
-        pets: pets.map((pet) => ({
-          ...pet,
-          nome: pet.nome.trim(),
-          especie: pet.especie.trim(),
-          alergiasCriticas: pet.alergiasCriticas.trim(),
-          idade: pet.idade !== "" ? Number(pet.idade) : null,
-        })),
-      };
-      await cadastrarTutor(payload);
-      setMensagem("Tutor e pet(s) cadastrados com sucesso!");
-      setTutor({ nome: "", email: "", telefone: "", cpf: "" });
-      setPets([{ ...petVazio }]);
-      setErros({});
+      // 1. Cadastra o Tutor
+      const resTutor = await axios.post('http://localhost:8080/tutores', tutor);
+      const tutorCriado = resTutor.data;
+
+      // 2. Cadastra os pets cadastrados associados a esse tutor
+      for (const p of pets) {
+        if (p.nome.trim()) {
+          await axios.post('http://localhost:8080/pets', {
+            ...p,
+            idade: p.idade ? parseInt(p.idade, 10) : null,
+            tutorId: tutorCriado.id,
+          });
+        }
+      }
+
+      setMensagem('Tutor e Pet(s) cadastrados com sucesso!');
+      setTutor({ nome: '', email: '', telefone: '', cpf: '' });
+      setPets([{ nome: '', especie: '', idade: '', alergiasCriticas: '' }]);
+
+      if (onCadastroSucesso) onCadastroSucesso();
     } catch (err) {
-      setErro(err.response?.data?.mensagem || "Nao foi possivel cadastrar. Verifique os dados.");
+      setErro(err.response?.data?.mensagem || 'Erro ao realizar o cadastro.');
     } finally {
-      setEnviando(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="card">
-      <h2>Cadastro de tutor e pet</h2>
-      <form onSubmit={enviar} noValidate>
-        <fieldset disabled={enviando}>
-          <legend>Dados do tutor</legend>
-          <label>
-            Nome
-            <input required autoComplete="name" {...atributosCampo("nome")} value={tutor.nome} onChange={(e) => atualizarTutor("nome", e.target.value)} />
-            {erroCampo("nome")}
-          </label>
-          <label>
-            E-mail
-            <input required type="email" autoComplete="email" {...atributosCampo("email")} value={tutor.email} onChange={(e) => atualizarTutor("email", e.target.value)} />
-            {erroCampo("email")}
-          </label>
-          <label>
-            Telefone
-            <input type="tel" autoComplete="tel-national" inputMode="tel" placeholder="(11) 99999-9999" maxLength={15} {...atributosCampo("telefone")} value={tutor.telefone} onChange={(e) => atualizarTutor("telefone", formatarTelefone(e.target.value))} />
-            {erroCampo("telefone")}
-          </label>
-          <label>
-            CPF
-            <input inputMode="numeric" placeholder="000.000.000-00" maxLength={14} {...atributosCampo("cpf")} value={tutor.cpf} onChange={(e) => atualizarTutor("cpf", formatarCpf(e.target.value))} />
-            {erroCampo("cpf")}
-          </label>
-        </fieldset>
+      <div className="form-container">
+        <div className="form-card">
+          <header className="form-header">
+            <h1 className="form-title">Cadastro de Tutor e Pet</h1>
+            <p className="form-subtitle">
+              Preencha os dados do tutor responsável e os animais de estimação para atendimento clínico.
+            </p>
+          </header>
 
-        {pets.map((pet, index) => (
-          <fieldset key={index} disabled={enviando}>
-            <legend>Pet {index + 1}</legend>
-            <label>
-              Nome do pet
-              <input required {...atributosCampo(`pets.${index}.nome`)} value={pet.nome} onChange={(e) => atualizarPet(index, "nome", e.target.value)} />
-              {erroCampo(`pets.${index}.nome`)}
-            </label>
-            <label>
-              Especie
-              <input value={pet.especie} onChange={(e) => atualizarPet(index, "especie", e.target.value)} />
-            </label>
-            <label>
-              Idade
-              <input type="number" min="0" step="1" {...atributosCampo(`pets.${index}.idade`)} value={pet.idade} onChange={(e) => atualizarPet(index, "idade", e.target.value)} />
-              {erroCampo(`pets.${index}.idade`)}
-            </label>
-            <label>
-              Alergias / reacoes criticas
-              <input
-                placeholder="ex.: alergia a dipirona"
-                value={pet.alergiasCriticas}
-                onChange={(e) => atualizarPet(index, "alergiasCriticas", e.target.value)}
-              />
-            </label>
-            {pets.length > 1 && (
-              <button type="button" className="btn-secundario" onClick={() => removerPet(index)}>
-                Remover pet
-              </button>
-            )}
-          </fieldset>
-        ))}
+          {mensagem && <div className="alert-box success">{mensagem}</div>}
+          {erro && <div className="alert-box error">{erro}</div>}
 
-        <button type="button" className="btn-secundario" onClick={adicionarPet} disabled={enviando}>
-          + Adicionar outro pet
-        </button>
+          <form onSubmit={handleSubmit} className="form-body">
+            {/* Sessão 1: Tutor */}
+            <section className="form-section">
+              <div className="form-section-header">
+                <span className="form-step-badge">1</span>
+                <h2 className="form-section-title">Dados do Tutor</h2>
+              </div>
 
-        <div className="acoes">
-          <button type="submit" disabled={enviando}>
-            {enviando ? "Enviando..." : "Cadastrar"}
-          </button>
+              <div className="form-grid-2">
+                <Input
+                    label="NOME COMPLETO"
+                    placeholder="Ex: Carlos Silva"
+                    value={tutor.nome}
+                    onChange={(e) => setTutor({ ...tutor, nome: e.target.value })}
+                    required
+                />
+                <Input
+                    label="E-MAIL"
+                    type="email"
+                    placeholder="Ex: carlos@email.com"
+                    value={tutor.email}
+                    onChange={(e) => setTutor({ ...tutor, email: e.target.value })}
+                    required
+                />
+              </div>
+
+              <div className="form-grid-2">
+                <Input
+                    label="TELEFONE / WHATSAPP"
+                    placeholder="(81) 99999-9999"
+                    value={tutor.telefone}
+                    onChange={(e) => setTutor({ ...tutor, telefone: e.target.value })}
+                    required
+                />
+                <Input
+                    label="CPF"
+                    placeholder="000.000.000-00"
+                    value={tutor.cpf}
+                    onChange={(e) => setTutor({ ...tutor, cpf: e.target.value })}
+                    required
+                />
+              </div>
+            </section>
+
+            <hr className="form-divider" />
+
+            {/* Sessão 2: Pets */}
+            <section className="form-section">
+              <div className="form-section-header">
+                <span className="form-step-badge">2</span>
+                <h2 className="form-section-title">Dados do(s) Pet(s)</h2>
+              </div>
+
+              {pets.map((p, index) => (
+                  <div key={index} className="sub-card-pet">
+                    <div className="sub-card-pet-header">
+                      <span className="pet-count-label">Pet {index + 1}</span>
+                      {pets.length > 1 && (
+                          <button
+                              type="button"
+                              onClick={() => removerPet(index)}
+                              className="btn-remove-pet"
+                          >
+                            Remover
+                          </button>
+                      )}
+                    </div>
+
+                    <div className="form-grid-2">
+                      <Input
+                          label="NOME DO PET"
+                          placeholder="Ex: Thor"
+                          value={p.nome}
+                          onChange={(e) => handlePetChange(index, 'nome', e.target.value)}
+                          required
+                      />
+                      <Input
+                          label="ESPÉCIE / RAÇA"
+                          placeholder="Ex: Canina (Labrador)"
+                          value={p.especie}
+                          onChange={(e) => handlePetChange(index, 'especie', e.target.value)}
+                          required
+                      />
+                    </div>
+
+                    <div className="form-grid-2">
+                      <Input
+                          label="IDADE (ANOS)"
+                          type="number"
+                          placeholder="Ex: 4"
+                          value={p.idade}
+                          onChange={(e) => handlePetChange(index, 'idade', e.target.value)}
+                      />
+                      <Input
+                          label="ALERGIAS CRÍTICAS OU OBSERVAÇÕES"
+                          placeholder="Ex: Alergia a Dipirona"
+                          value={p.alergiasCriticas}
+                          onChange={(e) => handlePetChange(index, 'alergiasCriticas', e.target.value)}
+                      />
+                    </div>
+                  </div>
+              ))}
+
+              <div className="add-pet-action">
+                <Button type="button" variant="outlined" size="sm" onClick={adicionarPet}>
+                  + Adicionar Outro Pet
+                </Button>
+              </div>
+            </section>
+
+            <div className="form-actions-footer">
+              <Button variant="primary" size="lg" type="submit" disabled={loading}>
+                {loading ? 'Cadastrando...' : 'Concluir Cadastro'}
+              </Button>
+            </div>
+          </form>
         </div>
-
-        {mensagem && <p className="sucesso" role="status">{mensagem}</p>}
-        {erro && <p className="erro" role="alert">{erro}</p>}
-      </form>
-    </div>
+      </div>
   );
 }
