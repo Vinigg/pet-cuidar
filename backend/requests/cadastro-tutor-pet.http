@@ -1,0 +1,48 @@
+@baseUrl = http://localhost:8080
+
+### Cadastro valido: 201 (troque o e-mail para repetir com sucesso)
+POST {{baseUrl}}/tutores
+Content-Type: application/json
+
+{
+  "nome": "Arthur Abelardo",
+  "email": "arthur.teste@example.com",
+  "telefone": "85999999999",
+  "pets": [
+    { "nome": "Rex", "especie": "Cachorro", "idade": 3, "alergiasCriticas": "Dipirona" },
+    { "nome": "Luna", "especie": "Gato", "idade": 0 }
+  ]
+}
+
+### E-mail duplicado: 409 (execute o cadastro valido primeiro)
+POST {{baseUrl}}/tutores
+Content-Type: application/json
+
+{
+  "nome": "Outro tutor",
+  "email": "arthur.teste@example.com",
+  "pets": [{ "nome": "Bob" }]
+}
+
+### E-mail invalido: 400
+POST {{baseUrl}}/tutores
+Content-Type: application/json
+
+{
+  "nome": "Arthur",
+  "email": "email-invalido",
+  "pets": [{ "nome": "Rex" }]
+}
+
+### Sem pets: 400
+POST {{baseUrl}}/tutores
+Content-Type: application/json
+
+{
+  "nome": "Arthur",
+  "email": "sem.pet@example.com",
+  "pets": []
+}
+
+### Confira os pets cadastrados: 200
+GET {{baseUrl}}/pets
