@@ -1,17 +1,27 @@
 package com.petcuidar.dto;
 
-public class PredicaoNoShowDTO {
-    private double score;
-    private String categoria; // BAIXO, MEDIO, ALTO
-    private String motivo;
+import java.time.LocalDateTime;
 
-    public PredicaoNoShowDTO(double score, String categoria, String motivo) {
+public class PredicaoNoShowDTO {
+    private Double score;
+    private String categoria; // BAIXO, MEDIO, ALTO ou INDISPONIVEL
+    private String motivo;
+    private LocalDateTime dataCalculo;
+
+    public PredicaoNoShowDTO(Double score, String categoria, String motivo) {
+        this(score, categoria, motivo, null);
+    }
+
+    public PredicaoNoShowDTO(Double score, String categoria, String motivo,
+                             LocalDateTime dataCalculo) {
         this.score = score;
         this.categoria = categoria;
         this.motivo = motivo;
+        this.dataCalculo = dataCalculo;
     }
 
-    public double getScore() { return score; }
+    public Double getScore() { return score; }
     public String getCategoria() { return categoria; }
     public String getMotivo() { return motivo; }
+    public LocalDateTime getDataCalculo() { return dataCalculo; }
 }

@@ -41,6 +41,20 @@ public class Lembrete {
 
     private LocalDateTime dataEnvio;
 
+    // Nullable no esquema para permitir upgrade seguro de bancos SQLite
+    // legados. A API normaliza registros antigos (NULL) para zero.
+    private Integer tentativas = 0;
+
+    @Column(name = "ultimo_erro", length = 1000)
+    private String ultimoErro;
+
+    @Column(name = "data_ultima_tentativa")
+    private LocalDateTime dataUltimaTentativa;
+
     /** true quando o texto da IA falhou no guardrail e o fallback foi usado. */
     private boolean usouFallback;
+
+    public int getTentativas() {
+        return tentativas == null ? 0 : tentativas;
+    }
 }
