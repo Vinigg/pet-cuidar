@@ -27,7 +27,7 @@ public class PredicaoNoShow {
      * nenhum tratamento. Fica guardado so para auditoria e nunca e exibido.
      * Nulo quando o preditor esta indisponivel (timeout/circuit breaker).
      */
-    @Column(name = "score_cru", precision = 4, scale = 3)
+    @Column(name = "score_cru")
     private Double scoreCru;
 
     /**
@@ -35,7 +35,7 @@ public class PredicaoNoShow {
      * ve e que o restante do sistema consome. Nulo quando nao ha predicao
      * ("score indisponivel"). 0.0 = baixo risco, 1.0 = alto risco.
      */
-    @Column(name = "score_usado", precision = 4, scale = 3)
+    @Column(name = "score_usado")
     private Double scoreUsado;
 
     /** true quando o score usado veio do fallback e nao do preditor. */
