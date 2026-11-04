@@ -36,6 +36,12 @@
         </dependency>
 
         <!-- SQLite -->
+        <!-- Migrations (versao gerenciada pelo Spring Boot; suporte a SQLite ja vem no core) -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>org.xerial</groupId>
             <artifactId>sqlite-jdbc</artifactId>
