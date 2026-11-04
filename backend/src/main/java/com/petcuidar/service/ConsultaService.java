@@ -12,18 +12,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 @Service
 public class ConsultaService {
 
-    private static final LocalTime ABERTURA = LocalTime.of(8, 0);
-    private static final LocalTime FECHAMENTO = LocalTime.of(18, 0);
-    private static final int INTERVALO_MINUTOS = 30;
     private static final List<StatusConsulta> STATUS_QUE_LIBERAM_HORARIO =
-            List.of(StatusConsulta.CANCELADA, StatusConsulta.NAO_COMPARECEU);
+            AgendaVeterinarioService.STATUS_QUE_LIBERAM_HORARIO;
 
     private final ConsultaRepository consultaRepository;
     private final PetRepository petRepository;
@@ -33,6 +29,7 @@ public class ConsultaService {
     private final NoShowPredictorService noShowPredictorService;
     private final ConsultaStateMachine consultaStateMachine;
     private final LembreteDeliveryService lembreteDeliveryService;
+    private final AgendaVeterinarioService agenda;
 
     public ConsultaService(ConsultaRepository consultaRepository,
                             PetRepository petRepository,
@@ -41,7 +38,8 @@ public class ConsultaService {
                             LembreteRepository lembreteRepository,
                             NoShowPredictorService noShowPredictorService,
                             ConsultaStateMachine consultaStateMachine,
-                            LembreteDeliveryService lembreteDeliveryService) {
+                            LembreteDeliveryService lembreteDeliveryService,
+                            AgendaVeterinarioService agenda) {
         this.consultaRepository = consultaRepository;
         this.petRepository = petRepository;
         this.veterinarioRepository = veterinarioRepository;
@@ -50,40 +48,25 @@ public class ConsultaService {
         this.noShowPredictorService = noShowPredictorService;
         this.consultaStateMachine = consultaStateMachine;
         this.lembreteDeliveryService = lembreteDeliveryService;
+        this.agenda = agenda;
     }
 
     // GET /veterinarios/{id}/disponibilidade
     public List<DisponibilidadeDTO> listarDisponibilidade(Long veterinarioId, LocalDate data) {
-        veterinarioRepository.findById(veterinarioId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Veterinario nao encontrado: id " + veterinarioId));
-
-        List<LocalDateTime> ocupados = consultaRepository
-                .findByVeterinarioIdAndDataHoraBetweenAndStatusNotInOrderByDataHoraAsc(
-                        veterinarioId, data.atTime(ABERTURA), data.atTime(FECHAMENTO), STATUS_QUE_LIBERAM_HORARIO)
-                .stream()
-                .map(Consulta::getDataHora)
-                .collect(Collectors.toList());
-
-        List<DisponibilidadeDTO> horarios = new ArrayList<>();
-        LocalTime cursor = ABERTURA;
-        while (cursor.isBefore(FECHAMENTO)) {
-            LocalDateTime horario = data.atTime(cursor);
-            horarios.add(new DisponibilidadeDTO(horario, !ocupados.contains(horario)));
-            cursor = cursor.plusMinutes(INTERVALO_MINUTOS);
-        }
-        return horarios;
+        return agenda.listarDisponibilidade(veterinarioId, data);
     }
 
     // POST /consultas (US2.1) - impede dois agendamentos no mesmo horario/veterinario
     @Transactional
     public ConsultaResponseDTO criar(ConsultaRequestDTO dto) {
-        validarHorario(dto.getDataHora());
+        agenda.validarDataHora(dto.getDataHora());
 
         Pet pet = petRepository.findById(dto.getPetId())
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Pet nao encontrado: id " + dto.getPetId()));
         Veterinario veterinario = veterinarioRepository.buscarParaAgendamento(dto.getVeterinarioId())
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Veterinario nao encontrado: id " + dto.getVeterinarioId()));
 
+        agenda.validarAtendimento(veterinario, dto.getDataHora());
         verificarConflito(dto.getVeterinarioId(), dto.getDataHora(), null);
 
         Consulta consulta = new Consulta();
@@ -120,7 +103,7 @@ public class ConsultaService {
         if (novaDataHora == null) {
             throw new IllegalArgumentException("Informe a nova data e hora da consulta.");
         }
-        validarHorario(novaDataHora);
+        agenda.validarDataHora(novaDataHora);
 
         Consulta consulta = buscarConsulta(consultaId);
         consultaStateMachine.validarReagendamento(consulta);
@@ -131,8 +114,9 @@ public class ConsultaService {
         // Mesmo bloqueio otimista do agendamento: reservas concorrentes para o
         // mesmo veterinario resultam em 409 em vez de horario duplicado.
         Long veterinarioId = consulta.getVeterinario().getId();
-        veterinarioRepository.buscarParaAgendamento(veterinarioId)
+        Veterinario veterinario = veterinarioRepository.buscarParaAgendamento(veterinarioId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Veterinario nao encontrado: id " + veterinarioId));
+        agenda.validarAtendimento(veterinario, novaDataHora);
         verificarConflito(veterinarioId, novaDataHora, consultaId);
 
         consulta.setDataHora(novaDataHora);
@@ -170,20 +154,6 @@ public class ConsultaService {
     // POST /consultas/{id}/lembrete (US3.1)
     public LembreteResponseDTO dispararLembrete(Long consultaId) {
         return lembreteDeliveryService.disparar(consultaId);
-    }
-
-    private void validarHorario(LocalDateTime dataHora) {
-        LocalTime hora = dataHora.toLocalTime();
-        boolean foraDoExpediente = hora.isBefore(ABERTURA) || !hora.isBefore(FECHAMENTO);
-        boolean foraDoIntervalo = hora.getMinute() % INTERVALO_MINUTOS != 0
-                || hora.getSecond() != 0 || hora.getNano() != 0;
-        if (foraDoExpediente || foraDoIntervalo) {
-            throw new IllegalArgumentException(
-                    "Horario invalido: use horarios de 30 em 30 minutos entre 08:00 e 17:30.");
-        }
-        if (dataHora.isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("Nao e possivel agendar uma consulta no passado.");
-        }
     }
 
     /** Regra unica de conflito (US2.1): mesmo veterinario, mesmo horario, consulta ativa. */

@@ -677,6 +677,229 @@ body {
   }
 }
 
+.veterinario-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.veterinario-toolbar {
+  margin-bottom: 0;
+}
+
+.veterinario-management .veterinario-page {
+  margin-top: 24px;
+}
+
+.veterinario-mode {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.veterinario-selector {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.veterinario-selector .btn {
+  justify-self: start;
+}
+
+.veterinario-selector .select-custom {
+  min-width: 0;
+}
+
+.veterinario-toolbar :focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+.veterinario-page .form-section-header {
+  flex-wrap: wrap;
+}
+
+.veterinario-page .form-step-badge {
+  flex-shrink: 0;
+}
+
+.veterinario-duration {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--color-neutral-muted);
+}
+
+.veterinario-day {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 24px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--color-neutral-border);
+}
+
+.veterinario-day-label {
+  display: flex;
+  align-items: center;
+  align-self: start;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.veterinario-day.selected .veterinario-day-label {
+  padding-top: 27px;
+}
+
+.veterinario-day-label input {
+  accent-color: var(--color-primary);
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.veterinario-day-periods {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.veterinario-day-off {
+  color: var(--color-neutral-muted);
+  font-size: 0.85rem;
+}
+
+.veterinario-period-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px;
+  gap: 10px;
+  align-items: end;
+  max-width: 360px;
+}
+
+.veterinario-period-fields .input-container {
+  padding: 0 10px;
+}
+
+.veterinario-period-fields .input-field {
+  min-width: 0;
+}
+
+.veterinario-period-fields .input-label {
+  letter-spacing: 0;
+}
+
+.veterinario-remove-period {
+  width: 36px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-danger);
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.veterinario-remove-period:hover:not(:disabled) {
+  background: var(--color-danger-light);
+}
+
+.veterinario-add-period {
+  justify-self: start;
+}
+
+.veterinario-page .alert-box,
+.veterinario-page .input-error-msg {
+  overflow-wrap: anywhere;
+}
+
+.veterinario-page :focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+@media (max-width: 1000px) {
+  .navbar {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .navbar-links {
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 680px) {
+  .navbar {
+    padding: 16px;
+  }
+
+  .navbar-tab {
+    padding: 8px 12px;
+  }
+
+  .veterinario-page {
+    margin: 24px auto;
+    padding: 0 16px;
+  }
+
+  .veterinario-toolbar {
+    margin-top: 24px;
+    padding: 0 16px;
+  }
+
+  .veterinario-page .form-card {
+    padding: 24px 18px;
+  }
+
+  .veterinario-page .form-title {
+    font-size: 1.65rem;
+  }
+
+  .veterinario-page .form-section-title {
+    font-size: 1.1rem;
+  }
+
+  .veterinario-duration {
+    margin-left: 40px;
+  }
+
+  .veterinario-day {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .veterinario-day.selected .veterinario-day-label {
+    padding-top: 0;
+  }
+
+  .veterinario-page .form-actions-footer .btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 380px) {
+  .veterinario-period-fields {
+    grid-template-columns: minmax(0, 1fr) 36px;
+  }
+
+  .veterinario-period-fields .input-group {
+    grid-column: 1;
+  }
+
+  .veterinario-remove-period {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+}
+
 /* ==========================================================
    TELA: AGENDAMENTO DE CONSULTA
    ========================================================== */

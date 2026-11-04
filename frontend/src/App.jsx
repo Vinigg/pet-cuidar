@@ -4,6 +4,7 @@ import CadastroTutorPet from './components/CadastroTutorPet';
 import AgendamentoForm from './components/AgendamentoForm';
 import PainelRecepcionista from './components/PainelRecepcionista';
 import HistoricoPet from './components/HistoricoPet';
+import Veterinarios from './components/Veterinarios';
 
 export default function App() {
     const [abaAtiva, setAbaAtiva] = useState('cadastro');
@@ -17,6 +18,7 @@ export default function App() {
                 {abaAtiva === 'agendamento' && <AgendamentoForm />}
                 {abaAtiva === 'painel' && <PainelRecepcionista />}
                 {abaAtiva === 'historico' && <HistoricoPet />}
+                {abaAtiva === 'veterinarios' && <Veterinarios />}
             </main>
         </div>
     );
