@@ -20,6 +20,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -63,7 +64,26 @@ class VeterinarioAgendaIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(20));
     }
 
-    private long cadastrarPet() throws Exception {
+        @Test
+        void migraBancoVazioSemDependerDoHibernate() throws Exception {
+                String bancoVazio = "jdbc:sqlite:target/agenda-vazio-" + UUID.randomUUID() + ".db";
+                Flyway migrador = Flyway.configure().dataSource(bancoVazio, null, null).load();
+                assertEquals(4, migrador.migrate().migrationsExecuted);
+                try (var connection = DriverManager.getConnection(bancoVazio);
+                         var statement = connection.createStatement();
+                         var resultado = statement.executeQuery("""
+                                         SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN (
+                                                 'tutores', 'pets', 'veterinarios', 'consultas', 'historico_atendimentos',
+                                                 'lembretes', 'predicoes_no_show', 'horarios_atendimento_veterinario',
+                                                 'bloqueios_agenda_veterinario')
+                                         """)) {
+                        assertTrue(resultado.next());
+                        assertEquals(9, resultado.getInt(1));
+                }
+                assertEquals(0, migrador.migrate().migrationsExecuted);
+        }
+
+        private long cadastrarPet() throws Exception {
         String resposta = mvc.perform(post("/tutores").contentType(APPLICATION_JSON).content("""
                 {"nome":"Tutor Agenda","email":"%s@example.com","pets":[{"nome":"Rex","especie":"Cachorro","idade":2}]}
                 """.formatted(UUID.randomUUID())))

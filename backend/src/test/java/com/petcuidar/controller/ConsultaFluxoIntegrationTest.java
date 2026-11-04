@@ -16,6 +16,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -52,6 +53,7 @@ class ConsultaFluxoIntegrationTest {
     @Autowired PetRepository pets;
     @Autowired TutorRepository tutores;
     @Autowired VeterinarioRepository veterinarios;
+    @Autowired HorarioAtendimentoVeterinarioRepository horarios;
     @Autowired PredicaoNoShowRepository predicoes;
     @SpyBean LembreteRepository lembretes;
 
@@ -74,7 +76,13 @@ class ConsultaFluxoIntegrationTest {
         novo.setNome("Rex");
         novo.setTutor(tutor);
         pet = pets.save(novo);
-        vet = veterinarios.findAll().get(0);
+        Veterinario profissional = new Veterinario();
+        profissional.setNome("Veterinario Fluxo");
+        vet = veterinarios.save(profissional);
+        for (DayOfWeek dia : DayOfWeek.values()) {
+            horarios.save(new HorarioAtendimentoVeterinario(vet, dia,
+                    LocalTime.of(8, 0), LocalTime.of(18, 0)));
+        }
     }
 
     private Consulta consulta(LocalDateTime dataHora) {

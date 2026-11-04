@@ -92,7 +92,15 @@ O frontend deve atualizar a disponibilidade apos um conflito.
 Flyway executa as migracoes em `backend/src/main/resources/db/migration` antes
 do Hibernate. Bancos legados sem historico recebem baseline na versao 0.
 V1 reconhece/cria a tabela de veterinarios; V2 adiciona `ativo` e a escala;
-V3 cria os bloqueios. O restante do esquema legado ainda usa `ddl-auto=update`.
+V3 cria os bloqueios; V4 completa as demais tabelas e indices com
+`IF NOT EXISTS`, preservando tabelas ja existentes. O Hibernate usa
+`ddl-auto=none`; nao e responsavel pela criacao do schema.
+
+A antiga `V1__criar_schema.sql`, que colidia com `V1__base_veterinarios.sql`,
+foi substituida por `V4__completar_schema.sql`. As migrations V1 da base de
+veterinarios, V2 e V3 foram preservadas. Se um ambiente ja registrou a outra
+V1 (`criar_schema`) no historico, ele precisa de conciliacao especifica antes
+da atualizacao. Nao execute `repair` nem apague o historico automaticamente.
 
 Para preservar o comportamento anterior, somente os veterinarios ja existentes
 recebem atendimento explicito de 08:00 a 18:00 nos sete dias. Os dois exemplos
