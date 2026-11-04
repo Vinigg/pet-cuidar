@@ -68,7 +68,7 @@ class VeterinarioAgendaIntegrationTest {
         void migraBancoVazioSemDependerDoHibernate() throws Exception {
                 String bancoVazio = "jdbc:sqlite:target/agenda-vazio-" + UUID.randomUUID() + ".db";
                 Flyway migrador = Flyway.configure().dataSource(bancoVazio, null, null).load();
-                assertEquals(4, migrador.migrate().migrationsExecuted);
+                assertEquals(5, migrador.migrate().migrationsExecuted);
                 try (var connection = DriverManager.getConnection(bancoVazio);
                          var statement = connection.createStatement();
                          var resultado = statement.executeQuery("""
