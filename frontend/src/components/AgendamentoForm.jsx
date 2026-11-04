@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Badge } from './common/UIComponents';
+import { criarConsulta, listarDisponibilidade, listarPets, listarVeterinarios } from '../api/api';
 
-export default function AgendamentoForm() {
+export default function AgendamentoForm({ tutorId }) {
   const [opcoesPets, setOpcoesPets] = useState([]);
   const [veterinarios, setVeterinarios] = useState([]);
 
@@ -15,44 +15,59 @@ export default function AgendamentoForm() {
   const [loading, setLoading] = useState(false);
   const [mensagemSucesso, setMensagemSucesso] = useState(null);
   const [erro, setErro] = useState(null);
+  const [erroPets, setErroPets] = useState(null);
+  const [erroDisponibilidade, setErroDisponibilidade] = useState(null);
+  const [carregandoOpcoes, setCarregandoOpcoes] = useState(true);
+  const requisicaoDisponibilidade = useRef(0);
 
-  // 1. Carrega pets e veterinários
-  useEffect(() => {
-    async function carregarDadosIniciais() {
-      try {
-        const [resPets, resVets] = await Promise.all([
-          axios.get('http://localhost:8080/pets/opcoes'),
-          axios.get('http://localhost:8080/veterinarios')
-        ]);
-        setOpcoesPets(resPets.data || []);
-        setVeterinarios(resVets.data || []);
-      } catch (err) {
-        console.error('Erro ao carregar opções iniciais:', err);
-      }
-    }
-    carregarDadosIniciais();
-  }, []);
-
-  // 2. Consulta disponibilidade da agenda
-  const buscarHorarios = useCallback(async () => {
-    if (!veterinarioId || !dataConsulta) return;
+  const carregarOpcoes = useCallback(async () => {
+    setCarregandoOpcoes(true);
+    setErroPets(null);
     try {
-      const response = await axios.get(
-          `http://localhost:8080/consultas/disponibilidade?veterinarioId=${veterinarioId}&data=${dataConsulta}`
-      );
-      setHorariosDisponiveis(response.data?.horarios || []);
-      setHorarioSelecionado('');
+      const [resPets, resVets] = await Promise.all([
+        listarPets(tutorId),
+        listarVeterinarios()
+      ]);
+      setOpcoesPets(Array.isArray(resPets.data) ? resPets.data : []);
+      setVeterinarios(Array.isArray(resVets.data) ? resVets.data : []);
     } catch (err) {
-      console.error('Erro ao consultar horários:', err);
-      setHorariosDisponiveis([]);
+      setOpcoesPets([]);
+      setErroPets('Nao foi possivel carregar os pets.');
+    } finally {
+      setCarregandoOpcoes(false);
+    }
+  }, [tutorId]);
+
+  useEffect(() => {
+    carregarOpcoes();
+  }, [carregarOpcoes]);
+
+  const buscarHorarios = useCallback(async () => {
+    setHorarioSelecionado('');
+    setHorariosDisponiveis([]);
+    setErroDisponibilidade(null);
+    if (!veterinarioId || !dataConsulta) return;
+
+    const idRequisicao = ++requisicaoDisponibilidade.current;
+    try {
+      const response = await listarDisponibilidade(veterinarioId, dataConsulta);
+      if (idRequisicao === requisicaoDisponibilidade.current) {
+        setHorariosDisponiveis(Array.isArray(response.data) ? response.data : []);
+      }
+    } catch (err) {
+      if (idRequisicao === requisicaoDisponibilidade.current) {
+        setErroDisponibilidade('Nao foi possivel consultar os horarios.');
+      }
     }
   }, [veterinarioId, dataConsulta]);
 
   useEffect(() => {
     buscarHorarios();
+    return () => {
+      requisicaoDisponibilidade.current += 1;
+    };
   }, [buscarHorarios]);
 
-  // 3. Salva a consulta
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!petId || !veterinarioId || !dataConsulta || !horarioSelecionado) {
@@ -64,17 +79,19 @@ export default function AgendamentoForm() {
     setErro(null);
     setMensagemSucesso(null);
 
-    const dataHoraIso = `${dataConsulta}T${horarioSelecionado}:00`;
+    const dataHoraIso = horarioSelecionado.includes('T')
+      ? horarioSelecionado
+      : `${dataConsulta}T${horarioSelecionado}:00`;
 
     try {
-      const response = await axios.post('http://localhost:8080/consultas', {
+      const response = await criarConsulta({
         petId: parseInt(petId, 10),
         veterinarioId: parseInt(veterinarioId, 10),
         dataHora: dataHoraIso
       });
 
       setMensagemSucesso(`Consulta agendada com sucesso para ${response.data.petNome || 'o pet'}!`);
-      buscarHorarios();
+  await buscarHorarios();
     } catch (err) {
       setErro(err.response?.data?.mensagem || 'Erro ao agendar consulta.');
     } finally {
@@ -95,6 +112,17 @@ export default function AgendamentoForm() {
 
           {mensagemSucesso && <div className="alert-box success">{mensagemSucesso}</div>}
           {erro && <div className="alert-box error">{erro}</div>}
+          {erroPets && (
+            <div className="alert-box error" role="alert">
+              {erroPets}
+              <button type="button" className="btn-secundario" onClick={carregarOpcoes}>
+                Tentar novamente
+              </button>
+            </div>
+          )}
+          {!carregandoOpcoes && !erroPets && opcoesPets.length === 0 && (
+            <div className="empty-state">Nenhum pet cadastrado.</div>
+          )}
 
           <form onSubmit={handleSubmit}>
             {/* Passo 1: Paciente e Profissional */}
@@ -111,12 +139,13 @@ export default function AgendamentoForm() {
                       className="select-custom"
                       value={petId}
                       onChange={(e) => setPetId(e.target.value)}
+                      disabled={carregandoOpcoes || Boolean(erroPets) || opcoesPets.length === 0}
                       required
                   >
                     <option value="">Escolha um pet...</option>
                     {opcoesPets.map(op => (
-                        <option key={op.petId} value={op.petId}>
-                          {op.petNome} (Tutor: {op.tutorNome})
+                        <option key={op.id} value={op.id}>
+                          {op.nome} - {op.especie} (Tutor: {op.tutorNome})
                         </option>
                     ))}
                   </select>
@@ -128,6 +157,7 @@ export default function AgendamentoForm() {
                       className="select-custom"
                       value={veterinarioId}
                       onChange={(e) => setVeterinarioId(e.target.value)}
+                      disabled={carregandoOpcoes || veterinarios.length === 0}
                       required
                   >
                     <option value="">Escolha um(a) veterinário(a)...</option>
@@ -166,7 +196,11 @@ export default function AgendamentoForm() {
               <div className="input-group">
                 <label className="input-label">GRADE DE HORÁRIOS DA AGENDA</label>
 
-                {!veterinarioId ? (
+                {erroDisponibilidade ? (
+                    <div className="empty-state" role="alert" style={{ padding: '20px' }}>
+                      {erroDisponibilidade}
+                    </div>
+                ) : !veterinarioId ? (
                     <div className="empty-state" style={{ padding: '20px' }}>
                       Selecione um(a) veterinário(a) para consultar os horários livres.
                     </div>
@@ -178,7 +212,10 @@ export default function AgendamentoForm() {
                     <div className="slots-grid">
                       {horariosDisponiveis.map((slot) => {
                         const isSelected = horarioSelecionado === slot.horario;
-                        const isOccupied = slot.ocupado;
+                        const isOccupied = slot.disponivel === false || slot.ocupado === true;
+                        const horarioVisivel = slot.horario.includes('T')
+                          ? slot.horario.split('T')[1].slice(0, 5)
+                          : slot.horario;
 
                         return (
                             <button
@@ -186,9 +223,9 @@ export default function AgendamentoForm() {
                                 type="button"
                                 disabled={isOccupied}
                                 onClick={() => setHorarioSelecionado(slot.horario)}
-                                className={`slot-btn ${isSelected ? 'selected' : ''}`}
+                                className={`slot-btn horario ${isSelected ? 'selected' : ''}`}
                             >
-                              <span>{slot.horario}</span>
+                              <span>{horarioVisivel}</span>
                               <span className="slot-status-text">
                           {isOccupied ? 'Ocupado' : isSelected ? 'Escolhido' : 'Livre'}
                         </span>

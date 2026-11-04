@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import axios from 'axios';
 import { Button, Input } from './common/UIComponents';
+import { cadastrarTutor } from '../api/api';
+import { formatarCpf, formatarTelefone, somenteDigitos, validarCadastro } from '../utils/validacaoCadastro';
 
 export default function CadastroTutorPet({ onCadastroSucesso }) {
   const [tutor, setTutor] = useState({ nome: '', email: '', telefone: '', cpf: '' });
@@ -10,11 +11,18 @@ export default function CadastroTutorPet({ onCadastroSucesso }) {
   const [loading, setLoading] = useState(false);
   const [mensagem, setMensagem] = useState(null);
   const [erro, setErro] = useState(null);
+  const [erros, setErros] = useState({});
 
   const handlePetChange = (index, campo, valor) => {
     const novosPets = [...pets];
     novosPets[index][campo] = valor;
     setPets(novosPets);
+    setErros({});
+  };
+
+  const handleTutorChange = (campo, valor) => {
+    setTutor({ ...tutor, [campo]: valor });
+    setErros({});
   };
 
   const adicionarPet = () => {
@@ -29,29 +37,33 @@ export default function CadastroTutorPet({ onCadastroSucesso }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const errosCadastro = validarCadastro(tutor, pets);
+    setErros(errosCadastro);
+    if (Object.keys(errosCadastro).length > 0) return;
+
     setLoading(true);
     setMensagem(null);
     setErro(null);
 
     try {
-      // 1. Cadastra o Tutor
-      const resTutor = await axios.post('http://localhost:8080/tutores', tutor);
-      const tutorCriado = resTutor.data;
-
-      // 2. Cadastra os pets cadastrados associados a esse tutor
-      for (const p of pets) {
-        if (p.nome.trim()) {
-          await axios.post('http://localhost:8080/pets', {
-            ...p,
-            idade: p.idade ? parseInt(p.idade, 10) : null,
-            tutorId: tutorCriado.id,
-          });
-        }
-      }
+      await cadastrarTutor({
+        nome: tutor.nome.trim(),
+        email: tutor.email.trim(),
+        cpf: somenteDigitos(tutor.cpf),
+        telefone: somenteDigitos(tutor.telefone),
+        pets: pets.filter((pet) => pet.nome.trim()).map((pet) => ({
+          ...pet,
+          nome: pet.nome.trim(),
+          especie: pet.especie.trim(),
+          idade: pet.idade === '' ? null : Number(pet.idade),
+          alergiasCriticas: pet.alergiasCriticas.trim(),
+        })),
+      });
 
       setMensagem('Tutor e Pet(s) cadastrados com sucesso!');
       setTutor({ nome: '', email: '', telefone: '', cpf: '' });
       setPets([{ nome: '', especie: '', idade: '', alergiasCriticas: '' }]);
+      setErros({});
 
       if (onCadastroSucesso) onCadastroSucesso();
     } catch (err) {
@@ -87,7 +99,8 @@ export default function CadastroTutorPet({ onCadastroSucesso }) {
                     label="NOME COMPLETO"
                     placeholder="Ex: Carlos Silva"
                     value={tutor.nome}
-                    onChange={(e) => setTutor({ ...tutor, nome: e.target.value })}
+                    onChange={(e) => handleTutorChange('nome', e.target.value)}
+                    error={erros.nome}
                     required
                 />
                 <Input
@@ -95,7 +108,9 @@ export default function CadastroTutorPet({ onCadastroSucesso }) {
                     type="email"
                     placeholder="Ex: carlos@email.com"
                     value={tutor.email}
-                    onChange={(e) => setTutor({ ...tutor, email: e.target.value })}
+                    onChange={(e) => handleTutorChange('email', e.target.value)}
+                    error={erros.email}
+                    aria-invalid={Boolean(erros.email)}
                     required
                 />
               </div>
@@ -103,17 +118,19 @@ export default function CadastroTutorPet({ onCadastroSucesso }) {
               <div className="form-grid-2">
                 <Input
                     label="TELEFONE / WHATSAPP"
+                    type="tel"
                     placeholder="(81) 99999-9999"
                     value={tutor.telefone}
-                    onChange={(e) => setTutor({ ...tutor, telefone: e.target.value })}
-                    required
+                    onChange={(e) => handleTutorChange('telefone', formatarTelefone(e.target.value))}
+                    error={erros.telefone}
                 />
                 <Input
                     label="CPF"
                     placeholder="000.000.000-00"
                     value={tutor.cpf}
-                    onChange={(e) => setTutor({ ...tutor, cpf: e.target.value })}
-                    required
+                    onChange={(e) => handleTutorChange('cpf', formatarCpf(e.target.value))}
+                    error={erros.cpf}
+                    aria-invalid={Boolean(erros.cpf)}
                 />
               </div>
             </section>
@@ -148,6 +165,7 @@ export default function CadastroTutorPet({ onCadastroSucesso }) {
                           placeholder="Ex: Thor"
                           value={p.nome}
                           onChange={(e) => handlePetChange(index, 'nome', e.target.value)}
+                          error={erros[`pets.${index}.nome`]}
                           required
                       />
                       <Input
@@ -166,6 +184,7 @@ export default function CadastroTutorPet({ onCadastroSucesso }) {
                           placeholder="Ex: 4"
                           value={p.idade}
                           onChange={(e) => handlePetChange(index, 'idade', e.target.value)}
+                          error={erros[`pets.${index}.idade`]}
                       />
                       <Input
                           label="ALERGIAS CRÍTICAS OU OBSERVAÇÕES"
