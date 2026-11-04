@@ -1,6 +1,7 @@
 package com.petcuidar.service;
 
 import com.petcuidar.config.EmailProperties;
+import com.petcuidar.exception.OperacaoNaoPermitidaException;
 import com.petcuidar.model.*;
 import com.petcuidar.repository.ConsultaRepository;
 import com.petcuidar.repository.LembreteRepository;
@@ -72,7 +73,7 @@ class LembreteDeliveryServiceTest {
         EmailSender sender = mock(EmailSender.class);
         Fixture fixture = new Fixture(sender, cancelada);
 
-        assertThrows(IllegalArgumentException.class, () -> fixture.service.disparar(10L));
+        assertThrows(OperacaoNaoPermitidaException.class, () -> fixture.service.disparar(10L));
         verifyNoInteractions(sender, fixture.generator);
     }
 

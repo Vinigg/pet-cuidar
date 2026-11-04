@@ -2,6 +2,7 @@ package com.petcuidar.service;
 
 import com.petcuidar.config.EmailProperties;
 import com.petcuidar.dto.LembreteResponseDTO;
+import com.petcuidar.exception.OperacaoNaoPermitidaException;
 import com.petcuidar.exception.RecursoNaoEncontradoException;
 import com.petcuidar.model.Consulta;
 import com.petcuidar.model.Lembrete;
@@ -49,7 +50,7 @@ public class LembreteDeliveryService {
         Consulta consulta = consultaRepository.findById(consultaId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Consulta nao encontrada: id " + consultaId));
         if (consulta.getStatus() == StatusConsulta.CANCELADA) {
-            throw new IllegalArgumentException("Nao e permitido enviar lembrete de consulta cancelada.");
+            throw new OperacaoNaoPermitidaException("Nao e permitido enviar lembrete de consulta cancelada.");
         }
 
         Lembrete lembrete = lembreteRepository.findByConsultaId(consultaId).orElse(null);
@@ -60,6 +61,10 @@ public class LembreteDeliveryService {
 
         if (lembrete == null) {
             lembrete = criarPendente(consulta);
+            lembrete = lembreteRepository.saveAndFlush(lembrete);
+        } else if (lembrete.getStatusEnvio() == StatusEnvioLembrete.PENDENTE
+                && (lembrete.getTextoValidado() == null || lembrete.getTextoValidado().isBlank())) {
+            lembrete = preencherConteudo(lembrete, consulta);
             lembrete = lembreteRepository.saveAndFlush(lembrete);
         }
 
@@ -115,8 +120,11 @@ public class LembreteDeliveryService {
     }
 
     private Lembrete criarPendente(Consulta consulta) {
+        return preencherConteudo(new Lembrete(), consulta);
+    }
+
+    private Lembrete preencherConteudo(Lembrete lembrete, Consulta consulta) {
         LembreteGeneratorService.ResultadoLembrete resultado = generatorService.gerar(consulta);
-        Lembrete lembrete = new Lembrete();
         lembrete.setConsulta(consulta);
         lembrete.setTextoGeradoIa(resultado.textoGeradoIa);
         lembrete.setTextoValidado(resultado.textoValidado);

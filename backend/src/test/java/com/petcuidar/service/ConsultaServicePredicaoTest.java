@@ -5,6 +5,7 @@ import com.petcuidar.model.Consulta;
 import com.petcuidar.model.ConsultaStateMachine;
 import com.petcuidar.model.PredicaoNoShow;
 import com.petcuidar.repository.ConsultaRepository;
+import com.petcuidar.repository.LembreteRepository;
 import com.petcuidar.repository.PetRepository;
 import com.petcuidar.repository.PredicaoNoShowRepository;
 import com.petcuidar.repository.VeterinarioRepository;
@@ -65,6 +66,7 @@ class ConsultaServicePredicaoTest {
                 petRepository,
                 veterinarioRepository,
                 predicaoRepository,
+                mock(LembreteRepository.class),
                 predictor,
                 stateMachine,
                 lembreteDeliveryService);
