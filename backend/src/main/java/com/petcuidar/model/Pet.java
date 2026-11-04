@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "pets")
@@ -19,6 +20,7 @@ public class Pet {
 
     @ManyToOne
     @JoinColumn(name = "tutor_id", nullable = false)
+    @JsonIgnore
     private Tutor tutor;
 
     @NotBlank
