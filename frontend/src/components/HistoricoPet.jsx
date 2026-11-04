@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Badge, Button } from './common/UIComponents';
+import { Badge } from './common/UIComponents';
 
 export default function HistoricoPet() {
   const [pets, setPets] = useState([]);
