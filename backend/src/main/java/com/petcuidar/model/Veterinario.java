@@ -24,6 +24,9 @@ public class Veterinario {
 
     private String especialidade;
 
+    @Column(nullable = false)
+    private boolean ativo = true;
+
     @Version
     @JsonIgnore
     @Setter(AccessLevel.NONE)

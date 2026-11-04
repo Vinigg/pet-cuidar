@@ -12,7 +12,12 @@ export const cadastrarTutor = (dados) => api.post("/tutores", dados);
 export const listarPets = (tutorId) => api.get("/pets", { params: { tutorId } });
 
 // ---- Veterinarios ----
-export const listarVeterinarios = () => api.get("/veterinarios");
+export const listarVeterinarios = (params) => api.get("/veterinarios", { params });
+export const cadastrarVeterinario = (dados) => api.post("/veterinarios", dados);
+export const obterVeterinario = (id) => api.get(`/veterinarios/${id}`);
+export const atualizarVeterinario = (id, dados) => api.put(`/veterinarios/${id}`, dados);
+export const listarHorariosVeterinario = (id) => api.get(`/veterinarios/${id}/horarios-atendimento`);
+export const atualizarHorariosVeterinario = (id, dados) => api.put(`/veterinarios/${id}/horarios-atendimento`, dados);
 export const listarDisponibilidade = (veterinarioId, data) =>
   api.get(`/veterinarios/${veterinarioId}/disponibilidade`, { params: { data } });
 
