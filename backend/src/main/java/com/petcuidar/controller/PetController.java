@@ -4,6 +4,7 @@ import com.petcuidar.dto.ResumoHistoricoDTO;
 import com.petcuidar.dto.PetOpcaoDTO;
 import com.petcuidar.model.HistoricoAtendimento;
 import com.petcuidar.service.PetService;
+import com.petcuidar.service.HistoricoAtendimentoService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -13,9 +14,11 @@ import java.util.List;
 public class PetController {
 
     private final PetService petService;
+    private final HistoricoAtendimentoService historicoService;
 
-    public PetController(PetService petService) {
+    public PetController(PetService petService, HistoricoAtendimentoService historicoService) {
         this.petService = petService;
+        this.historicoService = historicoService;
     }
 
     @GetMapping
@@ -25,11 +28,11 @@ public class PetController {
 
     @GetMapping("/{id}/historico")
     public List<HistoricoAtendimento> historico(@PathVariable Long id) {
-        return petService.listarHistorico(id);
+        return historicoService.buscarHistoricoPorPet(id);
     }
 
     @GetMapping("/{id}/historico/resumo")
     public ResumoHistoricoDTO resumo(@PathVariable Long id) {
-        return petService.obterResumo(id);
+        return petService.obterResumo(id); 
     }
 }
