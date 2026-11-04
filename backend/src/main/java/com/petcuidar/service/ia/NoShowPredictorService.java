@@ -63,6 +63,8 @@ public class NoShowPredictorService {
             PredicaoRequest request = montarRequest(consulta);
             PredicaoResponse response = restClient.post()
                     .uri("/predict")
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .accept(org.springframework.http.MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
                     .body(PredicaoResponse.class);
@@ -109,7 +111,8 @@ public class NoShowPredictorService {
     private static RestClient criarCliente(RestClient.Builder builder, String baseUrl, long timeoutMs) {
         Duration timeout = Duration.ofMillis(Math.max(1, timeoutMs));
         HttpClient httpClient = HttpClient.newBuilder().connectTimeout(timeout).build();
-        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        org.springframework.http.client.SimpleClientHttpRequestFactory requestFactory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(timeout);
         requestFactory.setReadTimeout(timeout);
         return builder.baseUrl(baseUrl).requestFactory(requestFactory).build();
     }
@@ -151,3 +154,4 @@ public class NoShowPredictorService {
     private record PredicaoResponse(Double score, String categoria, String motivo) {
     }
 }
+

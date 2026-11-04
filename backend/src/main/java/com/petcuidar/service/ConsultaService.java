@@ -142,7 +142,12 @@ public class ConsultaService {
         PredicaoNoShow entidade = predicaoRepository.findByConsultaId(consultaId).orElseGet(PredicaoNoShow::new);
         LocalDateTime dataCalculo = LocalDateTime.now();
         entidade.setConsulta(consulta);
-        entidade.setScore(dto.getScore());
+        // Por enquanto o preditor devolve um unico valor ja limitado a 0..1,
+        // entao cru e usado coincidem. scoreCru guarda a resposta bruta do
+        // preditor (auditoria) e scoreUsado o valor validado que o sistema usa.
+        entidade.setScoreCru(dto.getScore());
+        entidade.setScoreUsado(Math.max(0.0, Math.min(1.0, dto.getScore())));
+        entidade.setUsouFallback(false);
         entidade.setMotivo(dto.getMotivo());
         entidade.setDataCalculo(dataCalculo);
         predicaoRepository.save(entidade);
