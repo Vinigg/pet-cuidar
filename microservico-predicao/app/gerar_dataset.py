@@ -33,9 +33,6 @@ def gerar(n: int) -> pd.DataFrame:
     # Faixa de horario da consulta: 0=manha, 1=tarde, 2=fim de tarde
     periodo = RNG.integers(0, 3, size=n)
 
-    # Se ja houve pelo menos um lembrete confirmado antes (0/1)
-    ja_confirmou_antes = RNG.integers(0, 2, size=n)
-
     # Idade do pet (anos) - proxy fraco, mas ajuda o modelo a ser menos trivial
     idade_pet = RNG.integers(0, 18, size=n)
 
@@ -51,7 +48,6 @@ def gerar(n: int) -> pd.DataFrame:
         + 3.0 * taxa_faltas                   # historico de faltas pesa muito
         + 0.05 * dias_antecedencia            # quanto mais longe, mais esquece
         + 0.25 * (periodo == 2)               # fim de tarde falta um pouco mais
-        - 1.1 * ja_confirmou_antes            # quem confirma, comparece mais
         + 0.02 * idade_pet
     )
     prob = 1 / (1 + np.exp(-logit))
@@ -63,7 +59,6 @@ def gerar(n: int) -> pd.DataFrame:
         "taxa_faltas": taxa_faltas.round(3),
         "dias_antecedencia": dias_antecedencia,
         "periodo": periodo,
-        "ja_confirmou_antes": ja_confirmou_antes,
         "idade_pet": idade_pet,
         "faltou": faltou,
     })

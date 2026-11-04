@@ -26,7 +26,6 @@ FEATURES = [
     "taxa_faltas",
     "dias_antecedencia",
     "periodo",
-    "ja_confirmou_antes",
     "idade_pet",
 ]
 TARGET = "faltou"

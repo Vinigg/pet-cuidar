@@ -42,11 +42,14 @@ def recarregar_modelo():
 
 # ---- Contrato de ENTRADA (o que o back-end Java envia) ----
 class PredicaoRequest(BaseModel):
+    # ignore extras: o back-end pode continuar enviando campos nao usados
+    # (ex.: ja_confirmou_antes) sem quebrar a chamada.
+    model_config = {"extra": "ignore"}
+
     consultas_anteriores: int = Field(0, ge=0, description="Total de consultas anteriores do tutor")
     faltas_anteriores: int = Field(0, ge=0, description="Quantas dessas o tutor faltou")
     dias_antecedencia: int = Field(0, ge=0, description="Dias entre agendamento e consulta")
     periodo: int = Field(0, ge=0, le=2, description="0=manha, 1=tarde, 2=fim de tarde")
-    ja_confirmou_antes: int = Field(0, ge=0, le=1, description="1 se ja confirmou algum lembrete antes")
     idade_pet: int = Field(0, ge=0, description="Idade do pet em anos")
 
 

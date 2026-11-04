@@ -1,4 +1,4 @@
-# Microserviço de Predição de No-show — Pet Cuidar
+# Microserviço de Predição de No-show - Pet Cuidar
 
 Serviço Python (FastAPI + scikit-learn) que estima o risco de falta de uma
 consulta e devolve **score + categoria + motivo explicável**. É consumido pelo
@@ -43,7 +43,6 @@ Entrada (o que o back-end Java envia):
   "faltas_anteriores": 4,
   "dias_antecedencia": 21,
   "periodo": 2,
-  "ja_confirmou_antes": 0,
   "idade_pet": 10
 }
 ```
@@ -54,7 +53,6 @@ Entrada (o que o back-end Java envia):
 | faltas_anteriores | int ≥ 0 | quantas dessas o tutor faltou |
 | dias_antecedencia | int ≥ 0 | dias entre o agendamento e a consulta |
 | periodo | int 0–2 | 0=manhã, 1=tarde, 2=fim de tarde |
-| ja_confirmou_antes | int 0/1 | 1 se já confirmou algum lembrete antes |
 | idade_pet | int ≥ 0 | idade do pet em anos |
 
 Saída (idêntica ao `PredicaoNoShowDTO`):
