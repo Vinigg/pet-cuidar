@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS veterinarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome VARCHAR(255) NOT NULL,
+    especialidade VARCHAR(255),
+    versao BIGINT NOT NULL DEFAULT 0
+);

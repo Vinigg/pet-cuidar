@@ -6,6 +6,7 @@ export default function Navbar({ abaAtiva, setAbaAtiva }) {
         { id: 'agendamento', label: 'Agendar consulta' },
         { id: 'painel', label: 'Painel do dia' },
         { id: 'historico', label: 'Histórico do pet' },
+        { id: 'veterinarios', label: 'Veterinários' },
     ];
 
     return (
@@ -22,6 +23,7 @@ export default function Navbar({ abaAtiva, setAbaAtiva }) {
                         type="button"
                         onClick={() => setAbaAtiva(item.id)}
                         className={`navbar-tab ${abaAtiva === item.id ? 'active' : ''}`}
+                        aria-current={abaAtiva === item.id ? 'page' : undefined}
                     >
                         {item.label}
                     </button>

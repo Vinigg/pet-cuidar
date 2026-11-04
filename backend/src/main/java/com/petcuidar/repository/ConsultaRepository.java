@@ -10,6 +10,9 @@ import java.util.List;
 
 public interface ConsultaRepository extends JpaRepository<Consulta, Long> {
 
+        List<Consulta> findByVeterinarioIdAndDataHoraGreaterThanEqualAndStatusNotIn(
+                        Long veterinarioId, LocalDateTime inicio, Collection<StatusConsulta> statusIgnorados);
+
     // Usado para checar conflito de horario (US2.1: mesmo veterinario, mesmo horario)
     List<Consulta> findByVeterinarioIdAndDataHora(Long veterinarioId, LocalDateTime dataHora);
 

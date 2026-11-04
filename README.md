@@ -34,6 +34,22 @@ A API sobe em `http://localhost:8080`. O banco SQLite (`petcuidar.db`) e criado
 automaticamente na raiz de `backend/` na primeira execucao, com dois
 veterinarios de exemplo (`DataSeeder`).
 
+### Cadastro e escala de veterinarios
+
+A API permite cadastrar/editar/inativar profissionais, manter periodos semanais
+de atendimento e bloquear datas de ausencia. Disponibilidade, agendamento e
+reagendamento respeitam a escala individual. A aba **Veterinarios** no frontend
+permite cadastrar profissionais com um ou mais periodos por dia, incluindo
+intervalos de almoco. A opcao **Atualizar** seleciona profissionais ativos ou
+inativos para editar dados, situacao e escala. Dados e horarios possuem botoes
+de salvar separados. Bloqueios por data seguem disponiveis pela API.
+
+Contrato, regras e cuidados com a migracao do SQLite:
+[veterinarios-agenda.md](docs/veterinarios-agenda.md). Exemplos de requisicoes:
+[veterinarios-agenda.http](backend/requests/veterinarios-agenda.http).
+Faca backup do banco antes de atualizar um ambiente com dados reais. O projeto
+ainda precisa de autenticacao e autorizacao do perfil da recepcao para producao.
+
 ## Rodando o front-end
 
 Pre-requisitos: Node.js 18+.
@@ -58,6 +74,9 @@ em `REACT_APP_API_URL` (`.env`).
    dispare o lembrete (gerado por IA, com fallback automatico).
 4. Aba **Historico do pet**: consulte o resumo gerado por IA e o historico
    completo do pet.
+5. Aba **Veterinarios**: informe nome, especialidade e ao menos um dia de
+  atendimento; cadastre os periodos e confirme o cadastro. O profissional
+  fica disponivel ao abrir a aba **Agendar consulta**.
 
 ## Integracoes de IA, predicao e e-mail
 

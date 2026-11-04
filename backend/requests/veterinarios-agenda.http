@@ -1,0 +1,60 @@
+@baseUrl = http://localhost:8080
+@veterinarioId = 3
+@bloqueioId = 1
+
+### Cadastrar com periodos separados pelo almoco
+POST {{baseUrl}}/veterinarios
+Content-Type: application/json
+
+{
+  "nome": "Dra. Ana Souza",
+  "especialidade": "Clinica geral",
+  "horarios": [
+    {"diaSemana": "MONDAY", "horaInicio": "08:00", "horaFim": "12:00"},
+    {"diaSemana": "MONDAY", "horaInicio": "14:00", "horaFim": "18:00"}
+  ]
+}
+
+### Listar ativos
+GET {{baseUrl}}/veterinarios
+
+### Listar inativos
+GET {{baseUrl}}/veterinarios?ativo=false
+
+### Consultar cadastro
+GET {{baseUrl}}/veterinarios/{{veterinarioId}}
+
+### Editar cadastro ou inativar com ativo=false
+PUT {{baseUrl}}/veterinarios/{{veterinarioId}}
+Content-Type: application/json
+
+{"nome":"Dra. Ana Souza","especialidade":"Dermatologia","ativo":true}
+
+### Consultar escala
+GET {{baseUrl}}/veterinarios/{{veterinarioId}}/horarios-atendimento
+
+### Substituir toda a escala
+PUT {{baseUrl}}/veterinarios/{{veterinarioId}}/horarios-atendimento
+Content-Type: application/json
+
+{
+  "horarios": [
+    {"diaSemana": "MONDAY", "horaInicio": "08:00", "horaFim": "12:00"},
+    {"diaSemana": "MONDAY", "horaInicio": "14:00", "horaFim": "18:00"}
+  ]
+}
+
+### Consultar disponibilidade calculada (segunda-feira)
+GET {{baseUrl}}/veterinarios/{{veterinarioId}}/disponibilidade?data=2027-01-11
+
+### Bloquear um dia inteiro sem mudar a escala
+POST {{baseUrl}}/veterinarios/{{veterinarioId}}/bloqueios
+Content-Type: application/json
+
+{"inicio":"2027-01-11T00:00:00","fim":"2027-01-12T00:00:00","motivo":"Feriado"}
+
+### Listar bloqueios que intersectam o intervalo de datas
+GET {{baseUrl}}/veterinarios/{{veterinarioId}}/bloqueios?inicio=2027-01-01&fim=2027-01-31
+
+### Remover bloqueio
+DELETE {{baseUrl}}/veterinarios/{{veterinarioId}}/bloqueios/{{bloqueioId}}

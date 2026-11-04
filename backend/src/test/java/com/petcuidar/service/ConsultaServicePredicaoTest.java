@@ -69,7 +69,8 @@ class ConsultaServicePredicaoTest {
                 mock(LembreteRepository.class),
                 predictor,
                 stateMachine,
-                lembreteDeliveryService);
+                lembreteDeliveryService,
+                mock(AgendaVeterinarioService.class));
         return new Contexto(service, predicaoRepository);
     }
 
