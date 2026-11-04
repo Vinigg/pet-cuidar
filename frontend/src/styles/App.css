@@ -1133,6 +1133,153 @@ body {
   margin: 0;
 }
 
+/* Histórico completo do pet */
+.historico-pet-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  margin-bottom: 20px;
+  font-size: 0.95rem;
+  color: var(--color-neutral-muted);
+}
+
+.historico-pet-info strong {
+  font-size: 1.1rem;
+  color: var(--color-neutral-dark);
+}
+
+.historico-origem-badge {
+  margin-left: auto;
+}
+
+.historico-aviso-ia {
+  margin: 10px 0 0 0;
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--color-neutral-muted);
+}
+
+.historico-secao {
+  scroll-margin-top: 24px;
+  padding-top: 8px;
+}
+
+.historico-secao-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.historico-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.historico-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-neutral-border);
+  border-radius: var(--radius-md);
+}
+
+.historico-stat-valor {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--color-neutral-dark);
+}
+
+.historico-stat-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-neutral-muted);
+}
+
+.historico-filtro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 240px;
+  margin-bottom: 24px;
+}
+
+.historico-consulta-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.historico-consulta-header .timeline-date {
+  margin-bottom: 0;
+}
+
+.historico-consulta-vet {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-neutral-dark);
+  margin-bottom: 8px;
+}
+
+.historico-registro {
+  border: 1px solid var(--color-neutral-border);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-top: 8px;
+}
+
+.historico-registro-texto {
+  margin: 0 0 8px 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--color-neutral-dark);
+}
+
+.historico-registro-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 0.78rem;
+  color: var(--color-neutral-muted);
+}
+
+.historico-sem-registro {
+  margin: 4px 0 0 0;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--color-neutral-muted);
+}
+
+.historico-subtitulo {
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin: 32px 0 16px 0;
+}
+
+@media (max-width: 680px) {
+  .history-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .history-card {
+    padding: 24px;
+  }
+
+  .historico-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ==========================================================
    TELA: FORMULÁRIO DE ATENDIMENTOS
    ========================================================== */
