@@ -45,8 +45,8 @@ class OpenAiIaClientTest {
             props.setTimeoutMs(500);
             LembreteIaClient client = new OpenAiIaClient(props);
 
-                String resposta = client.gerar(new DadosLembrete(
-                    "Ana", "Rex", "Dra. Bia", LocalDateTime.of(2026, 10, 28, 15, 30)));
+            String resposta = client.gerar(new DadosLembrete(
+                "Ana", "Rex", veterinario, LocalDateTime.of(2026, 10, 28, 15, 30)));
 
             assertEquals("Ola Ana, consulta de Rex em 28/10/2026 as 15:30.", resposta);
             assertTrue(requestBody.get().contains("Ana"));
