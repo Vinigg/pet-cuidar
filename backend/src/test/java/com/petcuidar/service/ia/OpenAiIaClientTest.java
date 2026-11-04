@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -38,8 +39,8 @@ class OpenAiIaClientTest {
             props.setTimeoutMs(500);
             OpenAiIaClient client = new OpenAiIaClient(props);
 
-            String resposta = client.gerar(
-                    "Ana", "Rex", "28/10/2026 as 15:30", "Dra. Bia");
+                String resposta = client.gerar(new DadosLembrete(
+                    "Ana", "Rex", "Dra. Bia", LocalDateTime.of(2026, 10, 28, 15, 30)));
 
             assertEquals("Ola Ana, consulta de Rex em 28/10/2026 as 15:30.", resposta);
             assertTrue(requestBody.get().contains("Ana"));

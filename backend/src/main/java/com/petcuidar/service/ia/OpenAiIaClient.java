@@ -36,10 +36,12 @@ public class OpenAiIaClient implements LembreteIaClient, ResumoIaClient {
     }
 
     @Override
-    public String gerar(String nomeTutor, String nomePet, String dataHoraFmt, String veterinario) {
+    public String gerar(DadosLembrete dados) {
         String prompt = "Escreva um lembrete cordial de consulta veterinaria com no maximo 300 caracteres. "
-                + "Inclua literalmente tutor=" + nomeTutor + ", pet=" + nomePet + ", data_hora="
-                + dataHoraFmt + " e veterinario=" + veterinario + ". Nao invente informacoes.";
+                + "Inclua literalmente tutor=" + dados.nomeTutor() + ", pet=" + dados.nomePet()
+                + ", data_hora=" + dados.dataFormatada() + " as " + dados.horaFormatada()
+                + (dados.possuiVeterinario() ? " e veterinario=" + dados.nomeVeterinario() : "")
+                + ". Nao invente informacoes.";
         return completar(prompt);
     }
 
