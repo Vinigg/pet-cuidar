@@ -30,7 +30,7 @@ class LembreteGeneratorServiceTest {
     @Test void sucessoValidoEInvalidoAtualizamContadoresCorretamente() {
         IaProperties props = properties(500, 3, 30000);
         LembreteGeneratorService ok = new LembreteGeneratorService(props,
-                (tutor, pet, data, vet) -> "Ana Rex consulta 28/10/2026 as 15:30");
+                dados -> "Ana Rex consulta 28/10/2026 as 15:30");
         try {
             var result = ok.gerar(consulta());
             assertFalse(result.usouFallback);
@@ -39,7 +39,7 @@ class LembreteGeneratorServiceTest {
         } finally { ok.encerrarExecutor(); }
 
         LembreteGeneratorService invalid = new LembreteGeneratorService(props,
-                (tutor, pet, data, vet) -> "texto sem dados obrigatorios");
+                dados -> "texto sem dados obrigatorios");
         try {
             var result = invalid.gerar(consulta());
             assertTrue(result.usouFallback);
@@ -59,23 +59,60 @@ class LembreteGeneratorServiceTest {
     })
     void guardrailRejeitaNomeHorarioAusenteOuFormatoDivergente(String textoInvalido) {
         LembreteGeneratorService service = new LembreteGeneratorService(
-                properties(500, 3, 30000), (tutor, pet, data, vet) -> textoInvalido);
+                properties(500, 3, 30000), dados -> textoInvalido);
         try {
             var result = service.gerar(consulta());
             assertTrue(result.usouFallback);
             assertEquals(textoInvalido, result.textoGeradoIa);
             assertTrue(result.textoValidado.contains("Ana"));
             assertTrue(result.textoValidado.contains("Rex"));
-            assertTrue(result.textoValidado.contains("28/10/2026 as 15:30"));
+            assertTrue(result.textoValidado.contains("28/10/2026 às 15:30"));
         } finally {
             service.encerrarExecutor();
         }
     }
 
+    @Test
+    void respostaSemTextoUtilContaComoInvalidaEUsaTemplate() {
+        LembreteGeneratorService service = new LembreteGeneratorService(properties(500, 3, 30000),
+                dados -> { throw new RespostaIaInvalidaException("resposta sem texto"); });
+        try {
+            var result = service.gerar(consulta());
+            assertTrue(result.usouFallback);
+            assertNull(result.textoGeradoIa);
+            assertEquals("Olá, Ana! Lembramos que Rex tem consulta agendada com Dra. Bia em 28/10/2026 às 15:30. "
+                    + "Contamos com a sua presença! Equipe Pet Cuidar.", result.textoValidado);
+            assertEquals(1, service.obterMetricas().respostasInvalidas());
+        } finally { service.encerrarExecutor(); }
+    }
+
+    @Test
+    void respostaComDadoInventadoUsaTemplate() {
+        LembreteGeneratorService service = new LembreteGeneratorService(properties(500, 3, 30000),
+                dados -> "Ana, Rex tem consulta em 28/10/2026 às 15:30. Ligue (85) 3333-4444.");
+        try {
+            var result = service.gerar(consulta());
+            assertTrue(result.usouFallback);
+            assertFalse(result.textoValidado.contains("3333"));
+        } finally { service.encerrarExecutor(); }
+    }
+
+    @Test
+    void dadosObrigatoriosAusentesNaoChamamIa() {
+        AtomicInteger calls = new AtomicInteger();
+        LembreteGeneratorService service = new LembreteGeneratorService(properties(500, 3, 30000),
+                dados -> { calls.incrementAndGet(); return "x"; });
+        try {
+            Consulta semTutor = consulta(); semTutor.getPet().getTutor().setNome(" ");
+            assertThrows(com.petcuidar.exception.OperacaoNaoPermitidaException.class, () -> service.gerar(semTutor));
+            assertEquals(0, calls.get());
+        } finally { service.encerrarExecutor(); }
+    }
+
     @Test void falhasAbremCircuitoEBloqueiamNovasChamadas() {
         AtomicInteger calls = new AtomicInteger();
         LembreteGeneratorService service = new LembreteGeneratorService(properties(500, 3, 30000),
-                (t, p, d, v) -> { calls.incrementAndGet(); throw new IllegalStateException("offline"); });
+                dados -> { calls.incrementAndGet(); throw new IllegalStateException("offline"); });
         try {
             service.gerar(consulta()); service.gerar(consulta()); service.gerar(consulta());
             assertEquals(LembreteGeneratorService.EstadoCircuito.ABERTO, service.obterMetricas().estado());
@@ -87,7 +124,7 @@ class LembreteGeneratorServiceTest {
 
     @Test void timeoutCancelaTarefaEUsaFallback() {
         LembreteGeneratorService service = new LembreteGeneratorService(properties(30, 3, 30000),
-                (t, p, d, v) -> { try { Thread.sleep(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } return "late"; });
+                dados -> { try { Thread.sleep(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } return "late"; });
         try {
             assertTrue(service.gerar(consulta()).usouFallback);
             assertEquals(1, service.obterMetricas().timeouts());
@@ -98,7 +135,7 @@ class LembreteGeneratorServiceTest {
     @Test void recuperaAposIntervaloEResetaContador() throws Exception {
         AtomicBoolean success = new AtomicBoolean();
         LembreteGeneratorService service = new LembreteGeneratorService(properties(300, 1, 40),
-                (t, p, d, v) -> { if (!success.get()) throw new IllegalStateException("offline"); return "Ana Rex consulta 28/10/2026 as 15:30"; });
+                dados -> { if (!success.get()) throw new IllegalStateException("offline"); return "Ana Rex consulta 28/10/2026 as 15:30"; });
         try {
             service.gerar(consulta());
             assertEquals(LembreteGeneratorService.EstadoCircuito.ABERTO, service.obterMetricas().estado());
@@ -112,7 +149,7 @@ class LembreteGeneratorServiceTest {
     @Test void permiteSomenteUmaSondaDeRecuperacaoConcorrente() throws Exception {
         AtomicInteger calls = new AtomicInteger();
         CountDownLatch probeStarted = new CountDownLatch(1), releaseProbe = new CountDownLatch(1);
-        LembreteGeneratorService service = new LembreteGeneratorService(properties(1000, 1, 30), (t, p, d, v) -> {
+        LembreteGeneratorService service = new LembreteGeneratorService(properties(1000, 1, 30), dados -> {
             if (calls.incrementAndGet() == 1) throw new IllegalStateException("offline");
             probeStarted.countDown();
             try { releaseProbe.await(1, TimeUnit.SECONDS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }

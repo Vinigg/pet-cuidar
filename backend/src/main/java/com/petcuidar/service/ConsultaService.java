@@ -29,6 +29,7 @@ public class ConsultaService {
     private final PetRepository petRepository;
     private final VeterinarioRepository veterinarioRepository;
     private final PredicaoNoShowRepository predicaoRepository;
+    private final LembreteRepository lembreteRepository;
     private final NoShowPredictorService noShowPredictorService;
     private final ConsultaStateMachine consultaStateMachine;
     private final LembreteDeliveryService lembreteDeliveryService;
@@ -37,6 +38,7 @@ public class ConsultaService {
                             PetRepository petRepository,
                             VeterinarioRepository veterinarioRepository,
                             PredicaoNoShowRepository predicaoRepository,
+                            LembreteRepository lembreteRepository,
                             NoShowPredictorService noShowPredictorService,
                             ConsultaStateMachine consultaStateMachine,
                             LembreteDeliveryService lembreteDeliveryService) {
@@ -44,6 +46,7 @@ public class ConsultaService {
         this.petRepository = petRepository;
         this.veterinarioRepository = veterinarioRepository;
         this.predicaoRepository = predicaoRepository;
+        this.lembreteRepository = lembreteRepository;
         this.noShowPredictorService = noShowPredictorService;
         this.consultaStateMachine = consultaStateMachine;
         this.lembreteDeliveryService = lembreteDeliveryService;
@@ -81,14 +84,7 @@ public class ConsultaService {
         Veterinario veterinario = veterinarioRepository.buscarParaAgendamento(dto.getVeterinarioId())
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Veterinario nao encontrado: id " + dto.getVeterinarioId()));
 
-        boolean conflito = !consultaRepository
-                .findByVeterinarioIdAndDataHoraAndStatusNotIn(
-                        dto.getVeterinarioId(), dto.getDataHora(), STATUS_QUE_LIBERAM_HORARIO)
-                .isEmpty();
-        if (conflito) {
-            throw new ConflitoHorarioException(
-                    "Ja existe uma consulta marcada para este veterinario neste horario.");
-        }
+        verificarConflito(dto.getVeterinarioId(), dto.getDataHora(), null);
 
         Consulta consulta = new Consulta();
         consulta.setPet(pet);
@@ -111,6 +107,42 @@ public class ConsultaService {
         Consulta consulta = buscarConsulta(consultaId);
         consultaStateMachine.transicionar(consulta, status);
         return ConsultaResponseDTO.from(consultaRepository.save(consulta));
+    }
+
+    /**
+     * PATCH /consultas/{id}/reagendamento (PC-028). Altera a data/hora da
+     * propria consulta (mesmo id, pet, veterinario e status). Todas as
+     * validacoes ocorrem antes de qualquer alteracao e o metodo e transacional:
+     * conflito, horario invalido ou concorrencia preservam a consulta original.
+     */
+    @Transactional
+    public ConsultaResponseDTO reagendar(Long consultaId, LocalDateTime novaDataHora) {
+        if (novaDataHora == null) {
+            throw new IllegalArgumentException("Informe a nova data e hora da consulta.");
+        }
+        validarHorario(novaDataHora);
+
+        Consulta consulta = buscarConsulta(consultaId);
+        consultaStateMachine.validarReagendamento(consulta);
+        if (novaDataHora.equals(consulta.getDataHora())) {
+            throw new IllegalArgumentException("A nova data e hora deve ser diferente do horario atual.");
+        }
+
+        // Mesmo bloqueio otimista do agendamento: reservas concorrentes para o
+        // mesmo veterinario resultam em 409 em vez de horario duplicado.
+        Long veterinarioId = consulta.getVeterinario().getId();
+        veterinarioRepository.buscarParaAgendamento(veterinarioId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Veterinario nao encontrado: id " + veterinarioId));
+        verificarConflito(veterinarioId, novaDataHora, consultaId);
+
+        consulta.setDataHora(novaDataHora);
+        Consulta salva = consultaRepository.save(consulta);
+
+        // O lembrete ja gerado citava o horario antigo: volta a PENDENTE para
+        // que o proximo envio use o novo horario.
+        lembreteRepository.findByConsultaId(consultaId).ifPresent(this::reabrirLembrete);
+
+        return ConsultaResponseDTO.from(salva);
     }
 
     // GET /consultas/{id}/predicao-no-show (US4.1)
@@ -152,6 +184,27 @@ public class ConsultaService {
         if (dataHora.isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException("Nao e possivel agendar uma consulta no passado.");
         }
+    }
+
+    /** Regra unica de conflito (US2.1): mesmo veterinario, mesmo horario, consulta ativa. */
+    private void verificarConflito(Long veterinarioId, LocalDateTime dataHora, Long consultaIgnorada) {
+        boolean conflito = consultaRepository
+                .findByVeterinarioIdAndDataHoraAndStatusNotIn(veterinarioId, dataHora, STATUS_QUE_LIBERAM_HORARIO)
+                .stream()
+                .anyMatch(c -> !c.getId().equals(consultaIgnorada));
+        if (conflito) {
+            throw new ConflitoHorarioException(
+                    "Ja existe uma consulta marcada para este veterinario neste horario.");
+        }
+    }
+
+    private void reabrirLembrete(Lembrete lembrete) {
+        lembrete.setStatusEnvio(StatusEnvioLembrete.PENDENTE);
+        lembrete.setDataEnvio(null);
+        lembrete.setTextoGeradoIa(null);
+        lembrete.setTextoValidado(null);
+        lembrete.setUsouFallback(false);
+        lembreteRepository.save(lembrete);
     }
 
     private Consulta buscarConsulta(Long id) {

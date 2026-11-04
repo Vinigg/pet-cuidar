@@ -66,4 +66,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErro> handleTransicao(TransicaoEstadoInvalidaException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErro(409, ex.getMessage()));
     }
+
+    @ExceptionHandler(OperacaoNaoPermitidaException.class)
+    public ResponseEntity<ApiErro> handleOperacaoNaoPermitida(OperacaoNaoPermitidaException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErro(409, ex.getMessage()));
+    }
 }

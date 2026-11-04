@@ -81,18 +81,29 @@ disco dessa instancia. Pontos de atencao para producao na AWS:
 
 ## Segredos e integracoes externas
 
-Os adapters de LLM e Resend estao implementados, mas desabilitados por padrao.
-As chaves **nao devem** ir no `application.properties` nem no Git. Use o **AWS
-Systems Manager Parameter Store** (ou **Secrets Manager**) e injete no ambiente:
+As integracoes externas de LLM e e-mail usam simuladores locais por padrao.
+Chaves e credenciais **nao devem** ser gravadas no `application.properties`
+nem commitadas no Git. Armazene-as no **AWS Systems Manager Parameter Store**
+(ou **Secrets Manager**) e injete-as como variaveis de ambiente no Elastic
+Beanstalk/EC2.
 
-- `IA_PROVIDER=openai`, `LLM_API_KEY`, `LLM_MODEL` e `LLM_BASE_URL`;
-- `EMAIL_PROVIDER=resend`, `RESEND_API_KEY` e `EMAIL_FROM`;
-- `NOSHOW_PREDICTOR_BASE_URL`, apontando para o FastAPI publicado;
-- `LEMBRETE_JOB_ENABLED=true`, somente depois de validar o provedor de e-mail;
-- `LEMBRETE_TIME_ZONE`, quando o deploy nao operar em `America/Recife`.
+- **OpenAI:** `IA_PROVIDER=openai`, com `LLM_API_KEY`, `LLM_MODEL` e
+   `LLM_BASE_URL`.
+- **Anthropic:** `LLM_PROVIDER=anthropic`, com `LLM_API_KEY` e, se necessario,
+   `LLM_MODEL` e `LLM_BASE_URL`. A ativacao deve aguardar o ajuste da selecao de
+   clientes IA: na configuracao atual, o simulador e o cliente Anthropic podem
+   ser registrados simultaneamente.
+- **Resend:** `EMAIL_PROVIDER=resend`, `RESEND_API_KEY` e `EMAIL_FROM`.
+- **Preditor de no-show:** `NOSHOW_PREDICTOR_BASE_URL`, apontando para o
+   servico FastAPI publicado.
+- **Job de lembretes:** `LEMBRETE_JOB_ENABLED=true`, somente depois de validar
+   o provedor de e-mail.
+- **Fuso horario:** configure `LEMBRETE_TIME_ZONE` se o deploy nao operar em
+   `America/Recife`.
 
 Os provedores externos continuam nao homologados enquanto nao houver evidencia
-de uma chamada real controlada e dos respectivos limites/contas.
+de chamadas reais controladas e dos respectivos limites e contas. Sem uma chave
+de LLM, a aplicacao pode usar o template de fallback para gerar os lembretes.
 
 ## Resumo dos custos (nivel MVP)
 

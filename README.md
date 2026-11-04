@@ -61,11 +61,21 @@ em `REACT_APP_API_URL` (`.env`).
 
 ## Integracoes de IA, predicao e e-mail
 
-O modo local continua seguro e sem credenciais: `IA_PROVIDER=simulator` e
-`EMAIL_PROVIDER=local`. Para uma validacao explicita com servicos externos:
+O modo local funciona sem credenciais externas: `IA_PROVIDER=simulator`,
+`LLM_PROVIDER=simulador` e `EMAIL_PROVIDER=local`. O resumo do historico tambem
+usa o simulador por padrao. A geracao dos lembretes conta com timeout, circuit
+breaker, guardrail deterministico e template de fallback; falhas da IA nao
+impedem a geracao do texto validado.
 
-- `IA_PROVIDER=openai`, `LLM_API_KEY`, `LLM_MODEL` e, se necessario,
-  `LLM_BASE_URL` habilitam uma API de texto compativel com OpenAI.
+Para validacao explicita com servicos externos:
+
+- **OpenAI:** `IA_PROVIDER=openai`, `LLM_API_KEY`, `LLM_MODEL` e, se necessario,
+  `LLM_BASE_URL` habilitam o adapter compativel com OpenAI.
+- **Anthropic:** as propriedades estao disponiveis por `LLM_PROVIDER`,
+  `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_EFFORT` e
+  `LLM_MAX_TOKENS`. A ativacao deve aguardar o alinhamento da selecao de
+  clientes IA: na configuracao atual, o simulador e o cliente Anthropic podem
+  ser registrados simultaneamente.
 - `NOSHOW_PREDICTOR_BASE_URL` aponta para o microservico FastAPI em
   `microservico-predicao/`; falha, timeout ou resposta invalida retornam score
   indisponivel, nunca um risco inventado.
@@ -77,10 +87,20 @@ O job de lembretes fica desabilitado por padrao enquanto o e-mail usa o
 simulador local. Com um provedor real configurado, defina
 `LEMBRETE_JOB_ENABLED=true`; ele procura consultas nas proximas 24 horas no
 fuso `America/Recife`. Consultas canceladas e lembretes ja processados nao
-sao enviados novamente. Todas as credenciais ficam em variaveis de ambiente;
-nenhuma chave deve ser adicionada ao Git.
+sao enviados novamente. Todas as credenciais devem ficar em variaveis de
+ambiente e nunca ser adicionadas ao Git.
 
-Detalhes, contratos e comandos de teste: [docs/integracoes-luan.md](docs/integracoes-luan.md).
+| Variavel | Padrao | Descricao |
+|---|---|---|
+| `LLM_PROVIDER` | `simulador` | `anthropic` para usar o LLM real |
+| `LLM_API_KEY` | (vazio) | Chave da API. Nunca versionar |
+| `LLM_MODEL` | `claude-opus-5-5` | Modelo |
+| `LLM_EFFORT` | `low` | Nivel de esforco do modelo |
+| `LLM_MAX_TOKENS` | `2048` | Teto de tokens da resposta |
+| `LLM_BASE_URL` | `https://api.anthropic.com` | Endpoint |
+
+Detalhes de deploy e configuracao de segredos: [DEPLOY.md](DEPLOY.md). Exemplos
+de requisicoes da API: [consultas-lembretes.http](backend/requests/consultas-lembretes.http).
 
 ## Endpoints principais da API
 
@@ -90,17 +110,24 @@ Detalhes, contratos e comandos de teste: [docs/integracoes-luan.md](docs/integra
 | GET | `/veterinarios` | Lista veterinarios |
 | GET | `/veterinarios/{id}/disponibilidade?data=` | Horarios livres/ocupados no dia |
 | POST | `/consultas` | Cria agendamento (valida conflito de horario) |
-| PATCH | `/consultas/{id}/status` | Transiciona status da consulta conforme a máquina de estados |
+| PATCH | `/consultas/{id}/status` | Transiciona status (inclui confirmar e cancelar) conforme a máquina de estados |
+| PATCH | `/consultas/{id}/reagendamento` | Altera data/hora revalidando disponibilidade e conflito |
 | GET | `/consultas?data=` | Lista consultas do dia (painel da recepcionista) |
 | GET | `/consultas/{id}/predicao-no-show` | Score de risco de falta + motivo |
-| POST | `/consultas/{id}/lembrete` | Gera, valida e envia o lembrete de forma idempotente |
+| POST | `/consultas/{id}/lembrete` | Gera e valida o lembrete com fallback, entrega de forma idempotente; retorna 409 se a consulta estiver cancelada |
 | GET | `/pets/{id}/historico` | Historico completo do pet |
 | GET | `/pets/{id}/historico/resumo` | Resumo gerado por IA + link do historico |
+
+Fluxos de status, cancelamento e reagendamento: `docs/consulta-estados.md`.
+Exemplos de requisicoes: `backend/requests/consultas-lembretes.http`.
 
 ## Limitacoes conhecidas do MVP
 
 - Sem autenticacao/login implementados (o documento de arquitetura previa JWT
-  para recepcionista/veterinario — fica como proxima etapa).
+  para recepcionista/veterinario — fica como proxima etapa). Por isso as
+  operacoes "da recepcao" (status, cancelamento, reagendamento) nao estao
+  restritas por perfil.
+- Nao ha job automatico de lembretes (PC-029); o envio e disparado pela API.
 - SQLite e um banco em arquivo unico: adequado para o MVP e para demonstracao,
   mas nao recomendado para multiplas instancias do back-end rodando em
   paralelo (ver `DEPLOY.md`).
@@ -112,7 +139,8 @@ Detalhes, contratos e comandos de teste: [docs/integracoes-luan.md](docs/integra
 
 ## Validando o cadastro de tutor e pets
 
-Em `backend/`, execute `mvn test`. Os testes de cadastro usam um arquivo
+Em `backend/`, execute `mvn test`. Use JDK 17 ou 21: o Lombok gerenciado pelo
+Spring Boot 3.2.5 nao compila com JDK 25. Os testes de cadastro usam um arquivo
 SQLite exclusivo em `target/`, sem alterar o banco de desenvolvimento.
 Depois inicie a API com `mvn spring-boot:run`.
 

@@ -1,5 +1,6 @@
 package com.petcuidar.service;
 
+import com.petcuidar.exception.OperacaoNaoPermitidaException;
 import com.petcuidar.exception.TransicaoEstadoInvalidaException;
 import com.petcuidar.model.Consulta;
 import com.petcuidar.model.ConsultaStateMachine;
@@ -41,6 +42,23 @@ class ConsultaStateMachineTest {
         assertThrows(TransicaoEstadoInvalidaException.class, () -> machine(90).transicionar(absent, StatusConsulta.NAO_COMPARECEU));
         machine(30).transicionar(absent, StatusConsulta.NAO_COMPARECEU);
         assertEquals(StatusConsulta.NAO_COMPARECEU, absent.getStatus());
+    }
+
+    @Test void reagendamentoSomenteEmEstadoNaoFinalEAntesDoHorario() {
+        Consulta agendada = consulta("2026-10-27T13:00:00");
+        assertDoesNotThrow(() -> machine(0).validarReagendamento(agendada));
+        machine(0).transicionar(agendada, StatusConsulta.CONFIRMADA);
+        assertDoesNotThrow(() -> machine(0).validarReagendamento(agendada));
+
+        Consulta passada = consulta("2026-10-27T11:00:00");
+        assertThrows(OperacaoNaoPermitidaException.class, () -> machine(0).validarReagendamento(passada));
+
+        for (StatusConsulta fim : new StatusConsulta[]{StatusConsulta.CANCELADA, StatusConsulta.REALIZADA}) {
+            Consulta finalizada = consulta("2026-10-27T13:00:00");
+            machine(0).transicionar(finalizada, fim);
+            assertThrows(OperacaoNaoPermitidaException.class, () -> machine(0).validarReagendamento(finalizada));
+            assertEquals(fim, finalizada.getStatus());
+        }
     }
 
     @Test void rejeitaEstadoFinalEPreservaStatusAoFalhar() {
