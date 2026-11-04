@@ -2,6 +2,7 @@ package com.petcuidar.controller;
 
 import com.petcuidar.dto.PetOpcaoDTO;
 import com.petcuidar.service.PetService;
+import com.petcuidar.service.HistoricoAtendimentoService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -16,6 +17,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(PetController.class)
 class PetControllerHttpTest {
+    @MockBean
+    private HistoricoAtendimentoService historicoAtendimentoService;
     @Autowired MockMvc mvc;
     @MockBean PetService petService;
 
