@@ -79,15 +79,31 @@ disco dessa instancia. Pontos de atencao para producao na AWS:
   `application.properties`/`pom.xml` — o restante do codigo (entidades,
   repositories, services) nao precisa mudar, pois usa Spring Data JPA.
 
-## Segredos (chave da API de IA)
+## Segredos e integracoes externas
 
-A integracao com LLM (`AnthropicLembreteIaClient`) le a chave somente da
-variavel de ambiente `LLM_API_KEY`; ela **nao deve** ir no
-`application.properties` do repositorio. Recomenda-se guardar a chave no
-**AWS Systems Manager Parameter Store** (ou **Secrets Manager**) e injeta-la
-como variavel de ambiente no Elastic Beanstalk/EC2 no deploy, junto com
-`LLM_PROVIDER=anthropic` (e, se necessario, `LLM_MODEL`). Sem a chave, a
-aplicacao sobe normalmente e os lembretes saem pelo template de fallback.
+As integracoes externas de LLM e e-mail usam simuladores locais por padrao.
+Chaves e credenciais **nao devem** ser gravadas no `application.properties`
+nem commitadas no Git. Armazene-as no **AWS Systems Manager Parameter Store**
+(ou **Secrets Manager**) e injete-as como variaveis de ambiente no Elastic
+Beanstalk/EC2.
+
+- **OpenAI:** `IA_PROVIDER=openai`, com `LLM_API_KEY`, `LLM_MODEL` e
+   `LLM_BASE_URL`.
+- **Anthropic:** `LLM_PROVIDER=anthropic`, com `LLM_API_KEY` e, se necessario,
+   `LLM_MODEL` e `LLM_BASE_URL`. A ativacao deve aguardar o ajuste da selecao de
+   clientes IA: na configuracao atual, o simulador e o cliente Anthropic podem
+   ser registrados simultaneamente.
+- **Resend:** `EMAIL_PROVIDER=resend`, `RESEND_API_KEY` e `EMAIL_FROM`.
+- **Preditor de no-show:** `NOSHOW_PREDICTOR_BASE_URL`, apontando para o
+   servico FastAPI publicado.
+- **Job de lembretes:** `LEMBRETE_JOB_ENABLED=true`, somente depois de validar
+   o provedor de e-mail.
+- **Fuso horario:** configure `LEMBRETE_TIME_ZONE` se o deploy nao operar em
+   `America/Recife`.
+
+Os provedores externos continuam nao homologados enquanto nao houver evidencia
+de chamadas reais controladas e dos respectivos limites e contas. Sem uma chave
+de LLM, a aplicacao pode usar o template de fallback para gerar os lembretes.
 
 ## Resumo dos custos (nivel MVP)
 

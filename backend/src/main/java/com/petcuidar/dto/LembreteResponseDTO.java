@@ -7,16 +7,22 @@ public class LembreteResponseDTO {
     private StatusEnvioLembrete status;
     private String textoEnviado;
     private boolean usouFallback;
+    private int tentativas;
+    private String ultimoErro;
 
     public static LembreteResponseDTO from(Lembrete l) {
         LembreteResponseDTO dto = new LembreteResponseDTO();
         dto.status = l.getStatusEnvio();
         dto.textoEnviado = l.getTextoValidado();
         dto.usouFallback = l.isUsouFallback();
+        dto.tentativas = l.getTentativas();
+        dto.ultimoErro = l.getUltimoErro();
         return dto;
     }
 
     public StatusEnvioLembrete getStatus() { return status; }
     public String getTextoEnviado() { return textoEnviado; }
     public boolean isUsouFallback() { return usouFallback; }
+    public int getTentativas() { return tentativas; }
+    public String getUltimoErro() { return ultimoErro; }
 }

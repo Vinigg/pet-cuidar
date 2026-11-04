@@ -3,6 +3,8 @@ package com.petcuidar.service.ia;
 import com.petcuidar.config.IaProperties;
 import com.petcuidar.model.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.CountDownLatch;
@@ -47,7 +49,31 @@ class LembreteGeneratorServiceTest {
         } finally { invalid.encerrarExecutor(); }
     }
 
-    @Test void respostaSemTextoUtilContaComoInvalidaEUsaTemplate() {
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Bia Rex consulta 28/10/2026 as 15:30",
+            "Ana Luna consulta 28/10/2026 as 15:30",
+            "Ana Rex consulta 29/10/2026 as 15:30",
+            "Ana Rex consulta 2026-10-28 15:30",
+            "Lembrete de consulta veterinaria"
+    })
+    void guardrailRejeitaNomeHorarioAusenteOuFormatoDivergente(String textoInvalido) {
+        LembreteGeneratorService service = new LembreteGeneratorService(
+                properties(500, 3, 30000), dados -> textoInvalido);
+        try {
+            var result = service.gerar(consulta());
+            assertTrue(result.usouFallback);
+            assertEquals(textoInvalido, result.textoGeradoIa);
+            assertTrue(result.textoValidado.contains("Ana"));
+            assertTrue(result.textoValidado.contains("Rex"));
+            assertTrue(result.textoValidado.contains("28/10/2026 às 15:30"));
+        } finally {
+            service.encerrarExecutor();
+        }
+    }
+
+    @Test
+    void respostaSemTextoUtilContaComoInvalidaEUsaTemplate() {
         LembreteGeneratorService service = new LembreteGeneratorService(properties(500, 3, 30000),
                 dados -> { throw new RespostaIaInvalidaException("resposta sem texto"); });
         try {
@@ -60,7 +86,8 @@ class LembreteGeneratorServiceTest {
         } finally { service.encerrarExecutor(); }
     }
 
-    @Test void respostaComDadoInventadoUsaTemplate() {
+    @Test
+    void respostaComDadoInventadoUsaTemplate() {
         LembreteGeneratorService service = new LembreteGeneratorService(properties(500, 3, 30000),
                 dados -> "Ana, Rex tem consulta em 28/10/2026 às 15:30. Ligue (85) 3333-4444.");
         try {
@@ -70,7 +97,8 @@ class LembreteGeneratorServiceTest {
         } finally { service.encerrarExecutor(); }
     }
 
-    @Test void dadosObrigatoriosAusentesNaoChamamIa() {
+    @Test
+    void dadosObrigatoriosAusentesNaoChamamIa() {
         AtomicInteger calls = new AtomicInteger();
         LembreteGeneratorService service = new LembreteGeneratorService(properties(500, 3, 30000),
                 dados -> { calls.incrementAndGet(); return "x"; });

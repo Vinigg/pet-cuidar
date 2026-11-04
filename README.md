@@ -59,14 +59,36 @@ em `REACT_APP_API_URL` (`.env`).
 4. Aba **Historico do pet**: consulte o resumo gerado por IA e o historico
    completo do pet.
 
-## Sobre a integracao de IA neste repositorio
+## Integracoes de IA, predicao e e-mail
 
-A geracao de lembretes tem integracao real com LLM (API da Anthropic, SDK
-oficial `anthropic-java`), ativada por variavel de ambiente. Sem configuracao,
-o backend usa um **simulador local** (`LembreteIaSimulator`), que nao e uma
-integracao com LLM e serve para rodar o projeto sem chaves. Em qualquer modo,
-timeout, circuit breaker, guardrail deterministico e template de fallback
-estao implementados: falha da IA nunca impede o envio do lembrete.
+O modo local funciona sem credenciais externas: `IA_PROVIDER=simulator`,
+`LLM_PROVIDER=simulador` e `EMAIL_PROVIDER=local`. O resumo do historico tambem
+usa o simulador por padrao. A geracao dos lembretes conta com timeout, circuit
+breaker, guardrail deterministico e template de fallback; falhas da IA nao
+impedem a geracao do texto validado.
+
+Para validacao explicita com servicos externos:
+
+- **OpenAI:** `IA_PROVIDER=openai`, `LLM_API_KEY`, `LLM_MODEL` e, se necessario,
+  `LLM_BASE_URL` habilitam o adapter compativel com OpenAI.
+- **Anthropic:** as propriedades estao disponiveis por `LLM_PROVIDER`,
+  `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_EFFORT` e
+  `LLM_MAX_TOKENS`. A ativacao deve aguardar o alinhamento da selecao de
+  clientes IA: na configuracao atual, o simulador e o cliente Anthropic podem
+  ser registrados simultaneamente.
+- `NOSHOW_PREDICTOR_BASE_URL` aponta para o microservico FastAPI em
+  `microservico-predicao/`; falha, timeout ou resposta invalida retornam score
+  indisponivel, nunca um risco inventado.
+- `EMAIL_PROVIDER=resend`, `RESEND_API_KEY` e `EMAIL_FROM` habilitam o envio
+  transacional. O fluxo usa o texto validado, chave de idempotencia e ate tres
+  tentativas com backoff exponencial.
+
+O job de lembretes fica desabilitado por padrao enquanto o e-mail usa o
+simulador local. Com um provedor real configurado, defina
+`LEMBRETE_JOB_ENABLED=true`; ele procura consultas nas proximas 24 horas no
+fuso `America/Recife`. Consultas canceladas e lembretes ja processados nao
+sao enviados novamente. Todas as credenciais devem ficar em variaveis de
+ambiente e nunca ser adicionadas ao Git.
 
 | Variavel | Padrao | Descricao |
 |---|---|---|
@@ -77,8 +99,8 @@ estao implementados: falha da IA nunca impede o envio do lembrete.
 | `LLM_MAX_TOKENS` | `2048` | Teto de tokens da resposta |
 | `LLM_BASE_URL` | `https://api.anthropic.com` | Endpoint |
 
-Detalhes em `docs/resiliencia-ia.md`. O resumo de historico do pet
-(`ResumoHistoricoService`) continua simulado.
+Detalhes de deploy e configuracao de segredos: [DEPLOY.md](DEPLOY.md). Exemplos
+de requisicoes da API: [consultas-lembretes.http](backend/requests/consultas-lembretes.http).
 
 ## Endpoints principais da API
 
@@ -92,7 +114,7 @@ Detalhes em `docs/resiliencia-ia.md`. O resumo de historico do pet
 | PATCH | `/consultas/{id}/reagendamento` | Altera data/hora revalidando disponibilidade e conflito |
 | GET | `/consultas?data=` | Lista consultas do dia (painel da recepcionista) |
 | GET | `/consultas/{id}/predicao-no-show` | Score de risco de falta + motivo |
-| POST | `/consultas/{id}/lembrete` | Gera e "envia" o lembrete (IA + guardrail + fallback; 409 se cancelada) |
+| POST | `/consultas/{id}/lembrete` | Gera e valida o lembrete com fallback, entrega de forma idempotente; retorna 409 se a consulta estiver cancelada |
 | GET | `/pets/{id}/historico` | Historico completo do pet |
 | GET | `/pets/{id}/historico/resumo` | Resumo gerado por IA + link do historico |
 
@@ -109,9 +131,10 @@ Exemplos de requisicoes: `backend/requests/consultas-lembretes.http`.
 - SQLite e um banco em arquivo unico: adequado para o MVP e para demonstracao,
   mas nao recomendado para multiplas instancias do back-end rodando em
   paralelo (ver `DEPLOY.md`).
-- O envio real de e-mail nao esta implementado; `dispararLembrete` grava o
-  texto validado e marca o status como enviado, sem integrar a um provedor de
-  e-mail de fato.
+- Autenticacao/autorizacao por JWT ainda nao foi implementada; portanto os
+  endpoints devem permanecer em ambiente controlado ate essa frente ser entregue.
+- O adapter Resend e o adapter de LLM estao implementados, mas so ficam
+  homologados depois de uma validacao explicita com contas e credenciais reais.
 
 
 ## Validando o cadastro de tutor e pets

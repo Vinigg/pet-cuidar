@@ -14,11 +14,23 @@ import org.springframework.stereotype.Component;
 public class IaProperties {
 
     private long timeoutMs = 5000;
+    private String provider = "simulator";
+    private String baseUrl = "https://api.openai.com/v1";
+    private String apiKey = "";
+    private String model = "gpt-4o-mini";
     private CircuitBreaker circuitBreaker = new CircuitBreaker();
     private Llm llm = new Llm();
 
     public long getTimeoutMs() { return timeoutMs; }
     public void setTimeoutMs(long timeoutMs) { this.timeoutMs = timeoutMs; }
+    public String getProvider() { return provider; }
+    public void setProvider(String provider) { this.provider = provider; }
+    public String getBaseUrl() { return baseUrl; }
+    public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
+    public String getApiKey() { return apiKey; }
+    public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+    public String getModel() { return model; }
+    public void setModel(String model) { this.model = model; }
     public CircuitBreaker getCircuitBreaker() { return circuitBreaker; }
     public void setCircuitBreaker(CircuitBreaker circuitBreaker) { this.circuitBreaker = circuitBreaker; }
     public Llm getLlm() { return llm; }
