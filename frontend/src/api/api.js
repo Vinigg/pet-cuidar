@@ -30,3 +30,9 @@ export const dispararLembrete = (consultaId) => api.post(`/consultas/${consultaI
 // ---- Historico / Pets ----
 export const obterHistoricoPet = (petId) => api.get(`/pets/${petId}/historico`);
 export const obterResumoHistoricoPet = (petId) => api.get(`/pets/${petId}/historico/resumo`);
+
+// ---- Atendimentos ----
+export const registrarAtendimento = (dados) => api.post("/atendimentos", dados);
+export const atualizarAtendimento = (dados) => api.patch("/atendimentos", dados);
+export const obterAtendimento = (id) => api.get(`/atendimentos/${id}`);
+export const listarAtendimentosPorPet = (petId) => api.get(`/atendimentos/pet/${petId}`);

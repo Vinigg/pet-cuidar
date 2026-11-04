@@ -1,0 +1,50 @@
+### Atendimento - Registrar novo atendimento clínico
+POST http://localhost:8080/atendimentos
+Content-Type: application/json
+
+{
+  "petId": 1,
+  "consultaId": 1,
+  "veterinarioId": 1,
+  "descricaoClinica": "Pet apresenta sintomas de otite no ouvido direito. Prescritos antibióticos por 10 dias. Retorno em 2 semanas para reavaliação."
+}
+
+###
+
+### Atendimento - Registrar outro atendimento
+POST http://localhost:8080/atendimentos
+Content-Type: application/json
+
+{
+  "petId": 2,
+  "consultaId": 2,
+  "veterinarioId": 1,
+  "descricaoClinica": "Vacinação anual realizada. Aplicado imunizante contra raiva, DHPPC e leptospirose. Pet apresenta bom estado geral de saúde."
+}
+
+###
+
+### Atendimento - Atualizar descrição clínica
+PATCH http://localhost:8080/atendimentos
+Content-Type: application/json
+
+{
+  "atendimentoId": 1,
+  "veterinarioId": 1,
+  "descricaoClinica": "Pet apresenta sintomas de otite no ouvido direito. Prescritos antibióticos por 10 dias. Retorno em 2 semanas para reavaliação. ATUALIZADO: Tutor relatou melhora significativa após 5 dias de tratamento."
+}
+
+###
+
+### Atendimento - Obter detalhes de um atendimento
+GET http://localhost:8080/atendimentos/1
+
+###
+
+### Atendimento - Listar todos os atendimentos de um pet
+GET http://localhost:8080/atendimentos/pet/1
+
+###
+
+### Atendimento - Listar atendimentos do pet 2
+GET http://localhost:8080/atendimentos/pet/2

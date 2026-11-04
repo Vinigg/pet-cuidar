@@ -5,6 +5,7 @@ export default function Navbar({ abaAtiva, setAbaAtiva }) {
         { id: 'cadastro', label: 'Cadastro' },
         { id: 'agendamento', label: 'Agendar consulta' },
         { id: 'painel', label: 'Painel do dia' },
+        { id: 'atendimentos', label: 'Registrar Atendimento' },
         { id: 'historico', label: 'Histórico do pet' },
         { id: 'veterinarios', label: 'Veterinários' },
     ];
