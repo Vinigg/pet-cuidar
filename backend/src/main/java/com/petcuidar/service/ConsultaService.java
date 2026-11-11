@@ -156,9 +156,9 @@ public class ConsultaService {
                 dto.getScore(), dto.getCategoria(), dto.getMotivo(), dataCalculo);
     }
 
-    // POST /consultas/{id}/lembrete (US3.1)
+    // POST /consultas/{id}/lembrete (US3.1) - 502/504 se o e-mail nao for entregue
     public LembreteResponseDTO dispararLembrete(Long consultaId) {
-        return lembreteDeliveryService.disparar(consultaId);
+        return lembreteDeliveryService.dispararManual(consultaId);
     }
 
     /** Regra unica de conflito (US2.1): mesmo veterinario, mesmo horario, consulta ativa. */

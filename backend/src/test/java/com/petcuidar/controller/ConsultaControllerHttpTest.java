@@ -1,6 +1,8 @@
 package com.petcuidar.controller;
 
 import com.petcuidar.exception.GlobalExceptionHandler;
+import com.petcuidar.exception.IntegracaoExternaIndisponivelException;
+import com.petcuidar.exception.IntegracaoExternaTimeoutException;
 import com.petcuidar.exception.RecursoNaoEncontradoException;
 import com.petcuidar.exception.TransicaoEstadoInvalidaException;
 import com.petcuidar.service.ConsultaService;
@@ -13,7 +15,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ConsultaController.class)
@@ -40,6 +44,40 @@ class ConsultaControllerHttpTest {
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.mensagem").value("Transicao invalida"))
                 .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @Test void falhaDeEntregaDoLembreteResponde502NoFormatoPadrao() throws Exception {
+        when(consultaService.dispararLembrete(7L))
+                .thenThrow(new IntegracaoExternaIndisponivelException("E-mail nao entregue"));
+        mvc.perform(post("/consultas/7/lembrete"))
+                .andExpect(status().isBadGateway()).andExpect(jsonPath("$.status").value(502))
+                .andExpect(jsonPath("$.mensagem").value("E-mail nao entregue"))
+                .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @Test void timeoutNaEntregaDoLembreteResponde504NoFormatoPadrao() throws Exception {
+        when(consultaService.dispararLembrete(7L))
+                .thenThrow(new IntegracaoExternaTimeoutException("E-mail sem resposta"));
+        mvc.perform(post("/consultas/7/lembrete"))
+                .andExpect(status().isGatewayTimeout()).andExpect(jsonPath("$.status").value(504))
+                .andExpect(jsonPath("$.mensagem").value("E-mail sem resposta"))
+                .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @Test void erroInesperadoResponde500SemExporDetalhes() throws Exception {
+        when(consultaService.dispararLembrete(7L))
+                .thenThrow(new IllegalStateException("detalhe interno ana@example.com"));
+        mvc.perform(post("/consultas/7/lembrete"))
+                .andExpect(status().isInternalServerError()).andExpect(jsonPath("$.status").value(500))
+                .andExpect(jsonPath("$.mensagem").value(
+                        "Erro interno ao processar a requisicao. Tente novamente mais tarde."))
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(jsonPath("$.trace").doesNotExist());
+    }
+
+    @Test void metodoNaoSuportadoContinuaRespondendo405() throws Exception {
+        mvc.perform(delete("/consultas/1/status"))
+                .andExpect(status().isMethodNotAllowed()).andExpect(jsonPath("$.status").value(405));
     }
 
     @Test void corpoInvalidoResponde400() throws Exception {

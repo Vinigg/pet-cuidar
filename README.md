@@ -80,21 +80,24 @@ em `REACT_APP_API_URL` (`.env`).
 
 ## Integracoes de IA, predicao e e-mail
 
-O modo local funciona sem credenciais externas: `IA_PROVIDER=simulator`,
-`LLM_PROVIDER=simulador` e `EMAIL_PROVIDER=local`. O resumo do historico tambem
-usa o simulador por padrao. A geracao dos lembretes conta com timeout, circuit
-breaker, guardrail deterministico e template de fallback; falhas da IA nao
-impedem a geracao do texto validado.
+O modo local funciona sem credenciais externas: `LLM_PROVIDER=simulador`
+(padrao) e `EMAIL_PROVIDER=local`. Lembrete, resumo do historico e predicao de
+no-show contam com timeout, circuit breaker proprio de cada integracao e
+fallback deterministico: falha de IA nunca vira erro 5xx (a resposta sai com
+`usouFallback=true` ou score indisponivel). Detalhes em
+[docs/resiliencia-ia.md](docs/resiliencia-ia.md).
 
-Para validacao explicita com servicos externos:
+O provedor de IA e escolhido por `LLM_PROVIDER` e exatamente um cliente e
+registrado; valor invalido impede a inicializacao com mensagem clara. Cada
+provedor usa as proprias variaveis:
 
-- **OpenAI:** `IA_PROVIDER=openai`, `LLM_API_KEY`, `LLM_MODEL` e, se necessario,
-  `LLM_BASE_URL` habilitam o adapter compativel com OpenAI.
-- **Anthropic:** as propriedades estao disponiveis por `LLM_PROVIDER`,
-  `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_EFFORT` e
-  `LLM_MAX_TOKENS`. A ativacao deve aguardar o alinhamento da selecao de
-  clientes IA: na configuracao atual, o simulador e o cliente Anthropic podem
-  ser registrados simultaneamente.
+- **`openai`** (API compativel com `/chat/completions`): `IA_OPENAI_API_KEY`,
+  `IA_OPENAI_MODEL` e, se necessario, `IA_OPENAI_BASE_URL`.
+- **`llm-externo`**: `LLM_API_KEY` e, se necessario, `LLM_MODEL`,
+  `LLM_BASE_URL`, `LLM_EFFORT` e `LLM_MAX_TOKENS`. Sem chave, a aplicacao sobe
+  e os lembretes saem pelo template.
+
+Exemplo: `LLM_PROVIDER=llm-externo` e `LLM_API_KEY=<sua-chave>`.
 - `NOSHOW_PREDICTOR_BASE_URL` aponta para o microservico FastAPI em
   `microservico-predicao/`; falha, timeout ou resposta invalida retornam score
   indisponivel, nunca um risco inventado.
@@ -109,19 +112,31 @@ fuso `America/Recife`. Consultas canceladas e lembretes ja processados nao
 sao enviados novamente. Todas as credenciais devem ficar em variaveis de
 ambiente e nunca ser adicionadas ao Git.
 
-| Variavel | Padrao | Descricao |
-|---|---|---|
-| `LLM_PROVIDER` | `simulador` | `anthropic` para usar o LLM real |
-| `LLM_API_KEY` | (vazio) | Chave da API. Nunca versionar |
-| `LLM_MODEL` | `claude-opus-5-5` | Modelo |
-| `LLM_EFFORT` | `low` | Nivel de esforco do modelo |
-| `LLM_MAX_TOKENS` | `2048` | Teto de tokens da resposta |
-| `LLM_BASE_URL` | `https://api.anthropic.com` | Endpoint |
+| Variavel | Provedor | Padrao | Descricao |
+|---|---|---|---|
+| `LLM_PROVIDER` | — | `simulador` | `simulador`, `openai` ou `llm-externo` |
+| `IA_OPENAI_API_KEY` | `openai` | (vazio) | Chave da API. Nunca versionar |
+| `IA_OPENAI_MODEL` | `openai` | `gpt-4o-mini` | Modelo |
+| `IA_OPENAI_BASE_URL` | `openai` | `https://api.openai.com/v1` | Endpoint |
+| `LLM_API_KEY` | `llm-externo` | (vazio) | Chave da API. Nunca versionar |
+| `LLM_MODEL` | `llm-externo` | ver `application.properties` | Modelo |
+| `LLM_BASE_URL` | `llm-externo` | ver `application.properties` | Endpoint |
+| `LLM_EFFORT` | `llm-externo` | `low` | Nivel de esforco do modelo |
+| `LLM_MAX_TOKENS` | `llm-externo` | `2048` | Teto de tokens da resposta |
+
+Timeout e circuit breaker podem ser ajustados por integracao
+(`ia.lembrete.*`, `ia.resumo.*`, `ia.predicao.*`); sem ajuste valem
+`ia.timeout-ms=5000`, `ia.circuit-breaker.max-falhas=3` e
+`ia.circuit-breaker.reset-ms=30000`.
 
 Detalhes de deploy e configuracao de segredos: [DEPLOY.md](DEPLOY.md). Exemplos
 de requisicoes da API: [consultas-lembretes.http](backend/requests/consultas-lembretes.http).
 
 ## Endpoints principais da API
+
+Erros seguem o formato padrao `{status, mensagem, timestamp}`; a tabela de
+quando cada codigo e usado (400, 404, 409, 500, 502, 504) esta em
+[docs/erros-api.md](docs/erros-api.md).
 
 | Metodo | Endpoint | Descricao |
 |---|---|---|
@@ -133,7 +148,7 @@ de requisicoes da API: [consultas-lembretes.http](backend/requests/consultas-lem
 | PATCH | `/consultas/{id}/reagendamento` | Altera data/hora revalidando disponibilidade e conflito |
 | GET | `/consultas?data=` | Lista consultas do dia (painel da recepcionista) |
 | GET | `/consultas/{id}/predicao-no-show` | Score de risco de falta + motivo |
-| POST | `/consultas/{id}/lembrete` | Gera e valida o lembrete com fallback, entrega de forma idempotente; retorna 409 se a consulta estiver cancelada |
+| POST | `/consultas/{id}/lembrete` | Gera e valida o lembrete com fallback, entrega de forma idempotente; retorna 409 se a consulta estiver cancelada, 502 se o e-mail nao for entregue e 504 se o provedor de e-mail nao responder no tempo limite |
 | GET | `/pets/{id}/historico` | Historico completo do pet |
 | GET | `/pets/{id}/historico/resumo` | Resumo gerado por IA + link do historico |
 

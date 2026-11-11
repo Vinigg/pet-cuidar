@@ -12,17 +12,14 @@ import com.petcuidar.config.IaProperties;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.stream.Collectors;
 
 /**
  * Integracao real com LLM (PC-030) via SDK oficial da Anthropic.
- * Ativa quando ia.llm.provider=anthropic. Timeout, circuit breaker,
+ * Ativa quando ia.provider=llm-externo (bean registrado por
+ * {@link com.petcuidar.config.IaClientConfig}). Timeout, circuit breaker,
  * guardrail e fallback continuam no {@link LembreteGeneratorService};
  * aqui ficam apenas o prompt, a chamada e a leitura da resposta.
  *
@@ -33,8 +30,6 @@ import java.util.stream.Collectors;
  * - Envia apenas nomes, data e horario; nunca e-mail, telefone ou CPF.
  * - Nenhum log contem a chave, o prompt ou o texto gerado.
  */
-@Component
-@ConditionalOnProperty(name = "ia.llm.provider", havingValue = "anthropic")
 public class AnthropicLembreteIaClient implements LembreteIaClient {
 
     private static final Logger log = LoggerFactory.getLogger(AnthropicLembreteIaClient.class);
@@ -45,9 +40,7 @@ public class AnthropicLembreteIaClient implements LembreteIaClient {
     private final IaProperties.Llm config;
     private final String nomeClinica;
 
-    @Autowired
-    public AnthropicLembreteIaClient(IaProperties props,
-                                     @Value("${lembrete.nome-clinica:Pet Cuidar}") String nomeClinica) {
+    public AnthropicLembreteIaClient(IaProperties props, String nomeClinica) {
         this(criarCliente(props), props.getLlm(), nomeClinica);
     }
 
@@ -56,9 +49,9 @@ public class AnthropicLembreteIaClient implements LembreteIaClient {
         this.config = config;
         this.nomeClinica = nomeClinica == null || nomeClinica.isBlank() ? "Pet Cuidar" : nomeClinica.strip();
         if (client == null) {
-            log.warn("Provedor de IA 'anthropic' sem LLM_API_KEY: lembretes usarao o template de fallback.");
+            log.warn("Provedor de IA 'llm-externo' sem LLM_API_KEY: lembretes usarao o template de fallback.");
         } else {
-            log.info("Lembretes via LLM habilitados (provedor=anthropic, modelo={})", config.getModel());
+            log.info("Lembretes via LLM habilitados (provedor=llm-externo, modelo={})", config.getModel());
         }
     }
 

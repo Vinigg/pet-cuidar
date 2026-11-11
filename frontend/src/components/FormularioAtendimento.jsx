@@ -10,6 +10,16 @@ import {
   listarConsultasDoDia
 } from '../api/api';
 
+// A API devolve erros no formato {status, mensagem, timestamp}.
+const mensagemDaApi = (err, padrao) =>
+  err.response?.data?.mensagem || err.response?.data?.message || padrao;
+
+const dataDeHoje = () => {
+  // Data local (toISOString usa UTC e pode virar o dia seguinte à noite)
+  const agora = new Date();
+  return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+};
+
 export default function FormularioAtendimento() {
   // Estados para seleção
   const [pets, setPets] = useState([]);
@@ -61,19 +71,16 @@ export default function FormularioAtendimento() {
   }, []);
 
   // Carregar consultas do dia
-  useEffect(() => {
-    const carregarConsultas = async () => {
-      try {
-        // Data local (toISOString usa UTC e pode virar o dia seguinte à noite)
-        const agora = new Date();
-        const today = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
-        const response = await listarConsultasDoDia(today);
-        setConsultas(Array.isArray(response.data) ? response.data : []);
-      } catch (err) {
-        console.error('Erro ao carregar consultas:', err);
-      }
-    };
+  const carregarConsultas = async () => {
+    try {
+      const response = await listarConsultasDoDia(dataDeHoje());
+      setConsultas(Array.isArray(response.data) ? response.data : []);
+    } catch (err) {
+      console.error('Erro ao carregar consultas:', err);
+    }
+  };
 
+  useEffect(() => {
     carregarConsultas();
   }, []);
 
@@ -179,6 +186,9 @@ export default function FormularioAtendimento() {
       setDescricaoClinica('');
       setErrosValidacao({});
 
+      // A consulta passou para REALIZADA no backend: recarrega para mostrar o novo status.
+      await carregarConsultas();
+
       // Recarregar atendimentos
       if (petSelecionado) {
         const response = await listarAtendimentosPorPet(petSelecionado);
@@ -188,7 +198,8 @@ export default function FormularioAtendimento() {
       // Ocultar mensagem após 4 segundos
       setTimeout(() => setMensagemSucesso(null), 4000);
     } catch (err) {
-      const mensagem = err.response?.data?.message || 'Erro ao registrar atendimento. Tente novamente.';
+      // 409 (consulta cancelada/não compareceu) e 400 (consulta de outro pet) trazem a mensagem do backend.
+      const mensagem = mensagemDaApi(err, 'Erro ao registrar atendimento. Tente novamente.');
       setErro(mensagem);
     } finally {
       setLoading(false);
@@ -228,7 +239,7 @@ export default function FormularioAtendimento() {
       // Ocultar mensagem após 4 segundos
       setTimeout(() => setMensagemSucesso(null), 4000);
     } catch (err) {
-      const mensagem = err.response?.data?.message || 'Erro ao atualizar atendimento. Tente novamente.';
+      const mensagem = mensagemDaApi(err, 'Erro ao atualizar atendimento. Tente novamente.');
       setErro(mensagem);
     } finally {
       setLoading(false);
@@ -269,7 +280,7 @@ export default function FormularioAtendimento() {
         )}
 
         {erro && (
-          <div className="alert alert-error">
+          <div className="alert alert-error" role="alert">
             ✗ {erro}
           </div>
         )}

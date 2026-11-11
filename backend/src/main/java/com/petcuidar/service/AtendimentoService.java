@@ -4,21 +4,31 @@ import com.petcuidar.dto.AtualizacaoAtendimentoRequestDTO;
 import com.petcuidar.dto.AtendimentoResponseDTO;
 import com.petcuidar.dto.RegistroAtendimentoRequestDTO;
 import com.petcuidar.exception.RecursoNaoEncontradoException;
+import com.petcuidar.exception.TransicaoEstadoInvalidaException;
 import com.petcuidar.model.*;
 import com.petcuidar.repository.ConsultaRepository;
 import com.petcuidar.repository.HistoricoAtendimentoRepository;
 import com.petcuidar.repository.PetRepository;
 import com.petcuidar.repository.VeterinarioRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
  * Serviço para gerenciamento de atendimentos veterinários.
  * Responsável por registrar e atualizar descrições clínicas com rastreabilidade.
+ *
+ * <p>Integração com a máquina de estados: registrar o atendimento marca a
+ * consulta como REALIZADA via {@link ConsultaStateMachine}, na mesma transação
+ * (se o histórico não for gravado, o status também não muda). Consulta já
+ * REALIZADA aceita registros adicionais sem nova transição; CANCELADA ou
+ * NAO_COMPARECEU é recusada com 409.</p>
  */
 @Service
 public class AtendimentoService {
@@ -27,15 +37,28 @@ public class AtendimentoService {
     private final PetRepository petRepository;
     private final ConsultaRepository consultaRepository;
     private final VeterinarioRepository veterinarioRepository;
+    private final ConsultaStateMachine consultaStateMachine;
 
+    @Autowired
     public AtendimentoService(HistoricoAtendimentoRepository historicoRepository,
                               PetRepository petRepository,
                               ConsultaRepository consultaRepository,
-                              VeterinarioRepository veterinarioRepository) {
+                              VeterinarioRepository veterinarioRepository,
+                              ConsultaStateMachine consultaStateMachine) {
         this.historicoRepository = historicoRepository;
         this.petRepository = petRepository;
         this.consultaRepository = consultaRepository;
         this.veterinarioRepository = veterinarioRepository;
+        this.consultaStateMachine = consultaStateMachine;
+    }
+
+    /** Conveniência para testes: máquina de estados com relógio do sistema e tolerância zero. */
+    public AtendimentoService(HistoricoAtendimentoRepository historicoRepository,
+                              PetRepository petRepository,
+                              ConsultaRepository consultaRepository,
+                              VeterinarioRepository veterinarioRepository) {
+        this(historicoRepository, petRepository, consultaRepository, veterinarioRepository,
+                new ConsultaStateMachine(java.time.Clock.systemDefaultZone(), Duration.ZERO));
     }
 
     /**
@@ -45,6 +68,8 @@ public class AtendimentoService {
      * @param request DTO com dados do atendimento
      * @return DTO com dados do atendimento registrado
      * @throws RecursoNaoEncontradoException se pet, consulta ou veterinário não existirem
+     * @throws IllegalArgumentException se a consulta não for do pet informado (400)
+     * @throws TransicaoEstadoInvalidaException se a consulta estiver CANCELADA ou NAO_COMPARECEU (409)
      */
     @Transactional
     public AtendimentoResponseDTO registrarAtendimento(RegistroAtendimentoRequestDTO request) {
@@ -63,6 +88,11 @@ public class AtendimentoService {
         if (!veterinario.isAtivo()) {
             throw new IllegalArgumentException("Veterinário inativo não pode registrar atendimento");
         }
+        if (consulta.getPet() != null && !Objects.equals(consulta.getPet().getId(), pet.getId())) {
+            throw new IllegalArgumentException("A consulta informada não pertence ao pet informado");
+        }
+
+        marcarComoRealizada(consulta);
 
         HistoricoAtendimento atendimento = new HistoricoAtendimento();
         atendimento.setPet(pet);
@@ -75,6 +105,22 @@ public class AtendimentoService {
 
         HistoricoAtendimento atendimentoSalvo = historicoRepository.save(atendimento);
         return AtendimentoResponseDTO.from(atendimentoSalvo);
+    }
+
+    /**
+     * AGENDADA/CONFIRMADA → REALIZADA pela máquina de estados. Uma consulta já
+     * REALIZADA pode receber mais de um registro (ex.: complemento clínico).
+     */
+    private void marcarComoRealizada(Consulta consulta) {
+        if (consulta.getStatus() == StatusConsulta.REALIZADA) {
+            return;
+        }
+        if (consulta.getStatus() == StatusConsulta.CANCELADA || consulta.getStatus() == StatusConsulta.NAO_COMPARECEU) {
+            throw new TransicaoEstadoInvalidaException(
+                    "Nao e possivel registrar atendimento para consulta com status " + consulta.getStatus() + ".");
+        }
+        consultaStateMachine.transicionar(consulta, StatusConsulta.REALIZADA);
+        consultaRepository.save(consulta);
     }
 
     /**

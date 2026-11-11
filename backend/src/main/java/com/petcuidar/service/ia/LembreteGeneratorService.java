@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.time.Clock;
 import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.LongAdder;
@@ -23,16 +24,19 @@ import jakarta.annotation.PreDestroy;
  *  3. Se a chamada falhar, estourar o timeout, responder sem texto util, ou o
  *     guardrail rejeitar o texto, usa-se SEMPRE o template ({@link LembreteTemplate})
  *     - o lembrete nunca deixa de ser enviado por causa de um problema na IA.
- *  4. Um "circuit breaker" simples interrompe as chamadas ao modelo apos
- *     N falhas seguidas, evitando penalizar cada requisicao com o timeout
- *     inteiro enquanto o servico externo estiver fora do ar.
+ *  4. Um {@link CircuitBreakerIa} proprio desta integracao interrompe as
+ *     chamadas ao modelo apos N falhas seguidas, evitando penalizar cada
+ *     requisicao com o timeout inteiro enquanto o servico externo estiver
+ *     fora do ar. Timeout e limites: ia.lembrete.* (padrao: ia.timeout-ms e
+ *     ia.circuit-breaker.*).
  */
 @Service
 public class LembreteGeneratorService {
 
     private static final Logger log = LoggerFactory.getLogger(LembreteGeneratorService.class);
 
-    private final IaProperties props;
+    private final long timeoutMs;
+    private final CircuitBreakerIa circuitBreaker;
     private final LembreteIaClient clienteIa;
     private final LembreteTemplate template;
     private final LembreteGuardrail guardrail;
@@ -41,13 +45,9 @@ public class LembreteGeneratorService {
                 Thread t = new Thread(r, "ia-lembrete"); t.setDaemon(true); return t;
             }, new ThreadPoolExecutor.AbortPolicy());
 
-    // Estado simples do circuit breaker (em memoria; para producao, mover para Redis
-    // ou usar uma lib dedicada como resilience4j em ambiente multi-instancia)
+    // Mantido por compatibilidade: espelha CircuitBreakerIa.Estado.
     public enum EstadoCircuito { FECHADO, ABERTO, TESTE }
-    private EstadoCircuito estadoCircuito = EstadoCircuito.FECHADO;
-    private int falhasSeguidas = 0;
-    private long circuitoAbertoAte = 0;
-    private final LongAdder falhas = new LongAdder(), timeouts = new LongAdder(), fallbacks = new LongAdder(), invalidas = new LongAdder(), sucessos = new LongAdder();
+    private final LongAdder timeouts = new LongAdder(), fallbacks = new LongAdder(), invalidas = new LongAdder();
 
     public record Metricas(EstadoCircuito estado, int falhasConsecutivas, long falhas, long timeouts,
                            long fallbacks, long respostasInvalidas, long sucessos) {}
@@ -55,7 +55,13 @@ public class LembreteGeneratorService {
     @Autowired
     public LembreteGeneratorService(IaProperties props, LembreteIaClient clienteIa,
                                     LembreteTemplate template, LembreteGuardrail guardrail) {
-        this.props = props;
+        this(props, clienteIa, template, guardrail, Clock.systemUTC());
+    }
+
+    LembreteGeneratorService(IaProperties props, LembreteIaClient clienteIa,
+                             LembreteTemplate template, LembreteGuardrail guardrail, Clock clock) {
+        this.timeoutMs = props.timeoutMs(props.getLembrete());
+        this.circuitBreaker = new CircuitBreakerIa("ia-lembrete", props.circuitBreaker(props.getLembrete()), clock);
         this.clienteIa = clienteIa;
         this.template = template;
         this.guardrail = guardrail;
@@ -84,7 +90,7 @@ public class LembreteGeneratorService {
         // template consegue produzir um lembrete correto.
         String fallback = template.montar(dados);
 
-        if (!adquirirPermissao()) {
+        if (!circuitBreaker.permitirChamada()) {
             fallbacks.increment();
             log.warn("Circuit breaker de IA aberto - usando fallback direto (fallbacks={})", fallbacks.sum());
             return new ResultadoLembrete(null, fallback, true);
@@ -102,10 +108,10 @@ public class LembreteGeneratorService {
             } else {
                 log.warn("Falha ao gerar lembrete via IA: {}", causa.getClass().getSimpleName());
             }
-            registrarFalha();
+            circuitBreaker.registrarFalha();
             fallbacks.increment();
             log.info("Fallback deterministico utilizado (falhas={}, timeouts={}, respostas_invalidas={}, fallbacks={})",
-                    falhas.sum(), timeouts.sum(), invalidas.sum(), fallbacks.sum());
+                    circuitBreaker.obterMetricas().falhas(), timeouts.sum(), invalidas.sum(), fallbacks.sum());
             return new ResultadoLembrete(null, fallback, true);
         }
 
@@ -113,63 +119,34 @@ public class LembreteGeneratorService {
         if (rejeicao.isPresent()) {
             log.warn("Guardrail rejeitou a resposta da IA (motivo={}) - usando fallback", rejeicao.get());
             invalidas.increment();
-            registrarFalha();
+            circuitBreaker.registrarFalha();
             fallbacks.increment();
             log.info("Fallback deterministico utilizado apos rejeicao do guardrail (respostas_invalidas={}, fallbacks={})", invalidas.sum(), fallbacks.sum());
             return new ResultadoLembrete(textoGerado, fallback, true);
         }
 
-        registrarSucesso();
+        circuitBreaker.registrarSucesso();
 
         String aprovado = textoGerado.strip();
         return new ResultadoLembrete(textoGerado, aprovado, false);
     }
 
     /**
-     * Chamada ao cliente de IA com timeout (ia.timeout-ms). O cliente ativo e
-     * definido por ia.llm.provider (simulador ou anthropic); circuit breaker,
-     * guardrail e fallback independem do provedor.
+     * Chamada ao cliente de IA com timeout (ia.lembrete.timeout-ms). O cliente
+     * ativo e definido por ia.provider (simulador, openai ou llm-externo);
+     * circuit breaker, guardrail e fallback independem do provedor.
      */
     private String chamarModeloComTimeout(DadosLembrete dados)
             throws TimeoutException, ExecutionException, InterruptedException {
         Future<String> future = executor.submit(() -> clienteIa.gerar(dados));
-        try { return future.get(props.getTimeoutMs(), TimeUnit.MILLISECONDS); }
+        try { return future.get(timeoutMs, TimeUnit.MILLISECONDS); }
         catch (TimeoutException e) { timeouts.increment(); future.cancel(true); throw e; }
     }
 
-    private synchronized boolean adquirirPermissao() {
-        long agora = System.currentTimeMillis();
-        if (estadoCircuito == EstadoCircuito.ABERTO) {
-            if (agora < circuitoAbertoAte) return false;
-            estadoCircuito = EstadoCircuito.TESTE;
-            log.info("Circuit breaker de IA em tentativa de recuperacao");
-            return true;
-        }
-        return estadoCircuito != EstadoCircuito.TESTE;
-    }
-
-    private synchronized void registrarFalha() {
-        falhasSeguidas++;
-        falhas.increment();
-        if (falhasSeguidas >= props.getCircuitBreaker().getMaxFalhas()) {
-            circuitoAbertoAte = System.currentTimeMillis() + props.getCircuitBreaker().getResetMs();
-            boolean reaberto = estadoCircuito != EstadoCircuito.ABERTO;
-            estadoCircuito = EstadoCircuito.ABERTO;
-            if (reaberto) log.warn("Circuit breaker de IA ABERTO por {} ms apos {} falhas seguidas",
-                    props.getCircuitBreaker().getResetMs(), falhasSeguidas);
-        }
-    }
-
-    private synchronized void registrarSucesso() {
-        if (estadoCircuito != EstadoCircuito.FECHADO) log.info("Circuit breaker de IA FECHADO apos recuperacao");
-        estadoCircuito = EstadoCircuito.FECHADO;
-        falhasSeguidas = 0;
-        sucessos.increment();
-    }
-
-    public synchronized Metricas obterMetricas() {
-        return new Metricas(estadoCircuito, falhasSeguidas, falhas.sum(), timeouts.sum(),
-                fallbacks.sum(), invalidas.sum(), sucessos.sum());
+    public Metricas obterMetricas() {
+        CircuitBreakerIa.Metricas cb = circuitBreaker.obterMetricas();
+        return new Metricas(EstadoCircuito.valueOf(cb.estado().name()), cb.falhasConsecutivas(), cb.falhas(),
+                timeouts.sum(), fallbacks.sum(), invalidas.sum(), cb.sucessos());
     }
 
     @PreDestroy public void encerrarExecutor() { executor.shutdownNow(); }

@@ -11,6 +11,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.Map;
 
@@ -69,6 +70,8 @@ public class ResendEmailSender implements EmailSender {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new EmailDeliveryException("Envio de e-mail interrompido", true, e);
+        } catch (HttpTimeoutException e) {
+            throw EmailDeliveryException.tempoEsgotado(e);
         } catch (IOException e) {
             throw new EmailDeliveryException("Provedor de e-mail indisponivel", true, e);
         }

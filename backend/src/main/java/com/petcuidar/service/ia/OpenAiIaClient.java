@@ -2,9 +2,7 @@ package com.petcuidar.service.ia;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.petcuidar.config.IaProperties;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
@@ -14,9 +12,9 @@ import java.util.Map;
 /**
  * Adaptador HTTP para APIs compatíveis com OpenAI. A chave vem exclusivamente
  * de configuração externa; respostas brutas nunca chegam diretamente ao controller.
+ * Ativo quando ia.provider=openai; usa somente ia.base-url, ia.api-key e ia.model
+ * (variáveis IA_OPENAI_*). O bean é registrado por {@link com.petcuidar.config.IaClientConfig}.
  */
-@Component
-@ConditionalOnProperty(name = "ia.provider", havingValue = "openai")
 public class OpenAiIaClient implements LembreteIaClient, ResumoIaClient {
 
     private final IaProperties props;
@@ -55,7 +53,7 @@ public class OpenAiIaClient implements LembreteIaClient, ResumoIaClient {
 
     private String completar(String prompt) {
         if (props.getApiKey() == null || props.getApiKey().isBlank()) {
-            throw new IllegalStateException("LLM_API_KEY nao configurada");
+            throw new IllegalStateException("IA_OPENAI_API_KEY nao configurada");
         }
         JsonNode response = restClient.post()
                 .uri("/chat/completions")
