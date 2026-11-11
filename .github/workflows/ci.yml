@@ -52,6 +52,8 @@ jobs:
           cache: pip
           cache-dependency-path: microservico-predicao/requirements.txt
       - run: pip install -r requirements.txt
+      - name: Run prediction service tests
+        run: python -m pytest
       - name: Validate module and prediction contract
         run: |
           python -m compileall -q app

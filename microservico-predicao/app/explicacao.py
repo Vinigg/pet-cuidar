@@ -23,7 +23,6 @@ def montar_motivo(dados: Dict, score: float) -> str:
     consultas = int(dados.get("consultas_anteriores", 0))
     faltas = int(dados.get("faltas_anteriores", 0))
     antecedencia = int(dados.get("dias_antecedencia", 0))
-    confirmou = int(dados.get("ja_confirmou_antes", 0))
 
     if consultas == 0:
         return "Tutor sem historico de consultas anteriores; risco estimado pela media."
@@ -31,6 +30,4 @@ def montar_motivo(dados: Dict, score: float) -> str:
     partes = [f"{faltas} falta(s) em {consultas} consulta(s) anteriores"]
     if antecedencia >= 15:
         partes.append(f"agendada com {antecedencia} dias de antecedencia")
-    if confirmou:
-        partes.append("ja confirmou presenca em lembretes anteriores")
     return "; ".join(partes).capitalize() + "."
