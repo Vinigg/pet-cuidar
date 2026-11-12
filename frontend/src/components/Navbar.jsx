@@ -3,9 +3,11 @@ import React from 'react';
 export default function Navbar({ abaAtiva, setAbaAtiva, usuario, onLogout }) {
     const abas = [
         { id: 'painel', label: 'Painel do dia' },
-        { id: 'agendamento', label: 'Agendar consulta' },
-        { id: 'cadastro', label: 'Cadastro' },
-        { id: 'historico', label: 'Histórico do pet' }
+        { id: 'agenda-semanal', label: 'Agenda' },
+        { id: 'tutores-pets', label: 'Tutores e pets' },
+        { id: 'lembretes', label: 'Lembretes' },
+        { id: 'historico', label: 'Prontuário' },
+        { id: 'veterinarios', label: 'Veterinários' }
     ];
 
     return (
@@ -14,8 +16,8 @@ export default function Navbar({ abaAtiva, setAbaAtiva, usuario, onLogout }) {
                 <span className="navbar-paw">🐾</span>
                 <div>
                     <span className="navbar-logo-text">Pet Cuidar</span>
-                    <span style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
-            Recepção & Clínica
+                    <span style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255, 255, 255, 0.75)', fontWeight: 600 }}>
+            Painel da Recepção
           </span>
                 </div>
             </div>
@@ -35,15 +37,15 @@ export default function Navbar({ abaAtiva, setAbaAtiva, usuario, onLogout }) {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#FFFFFF' }}>
-                    <div className="user-avatar-circle" style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#FFFFFF' }}>
+                    <div className="user-avatar-circle" style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', color: '#FFFFFF' }}>
                         🩺
                     </div>
                     <div className="user-meta-name">
             <span className="user-name-title" style={{ color: '#FFFFFF' }}>
-              {usuario?.nome || 'Equipe Clínica'}
+              {usuario?.nome || 'Dra. Ana Souza'}
             </span>
-                        <span className="user-role-subtitle" style={{ color: 'rgba(255,255,255,0.7)' }}>
-              Profissional
+                        <span className="user-role-subtitle" style={{ color: 'rgba(255, 255, 255, 0.75)' }}>
+              Recepção & Clínica
             </span>
                     </div>
                 </div>

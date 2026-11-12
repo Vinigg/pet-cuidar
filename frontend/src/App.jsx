@@ -12,22 +12,29 @@ import ConsultaAgendadaSucesso from './components/tutor/ConsultaAgendadaSucesso'
 import TutorConsultas from './components/tutor/TutorConsultas';
 import DetalhesConsulta from './components/tutor/DetalhesConsulta';
 
-// Módulos da Recepção / Clínica
+// Módulos da Recepção & Clínica
 import Navbar from './components/Navbar';
 import PainelRecepcionista from './components/PainelRecepcionista';
+import AgendaSemanal from './components/AgendaSemanal';
+import GestaoTutoresPets from './components/GestaoTutoresPets';
+import LembretesRecepcao from './components/LembretesRecepcao';
+import HistoricoPet from './components/HistoricoPet';
+import Veterinarios from './components/Veterinarios';
 import CadastroTutorPet from './components/CadastroTutorPet';
 import AgendamentoForm from './components/AgendamentoForm';
-import HistoricoPet from './components/HistoricoPet';
 
 export default function App() {
     const [usuarioLogado, setUsuarioLogado] = useState(null);
     const [telaAtual, setTelaAtual] = useState('login');
 
+    // Sub-abas do Tutor
     const [abaTutor, setAbaTutor] = useState('inicio');
     const [dadosAgendamentoSucesso, setDadosAgendamentoSucesso] = useState(null);
+
+    // Sub-abas da Clínica
     const [abaClinica, setAbaClinica] = useState('painel');
 
-    // FLUXO DESLOGADO
+    // 1. FLUXO DESLOGADO
     if (!usuarioLogado) {
         if (telaAtual === 'criar-conta') {
             return (
@@ -47,6 +54,8 @@ export default function App() {
                     setUsuarioLogado(dados);
                     if (dados.role === 'tutor') {
                         setAbaTutor('inicio');
+                    } else {
+                        setAbaClinica('painel');
                     }
                 }}
                 onCadastrarTutor={() => setTelaAtual('criar-conta')}
@@ -54,7 +63,7 @@ export default function App() {
         );
     }
 
-    // FLUXO DO TUTOR
+    // 2. PORTAL DO TUTOR
     if (usuarioLogado.role === 'tutor') {
         return (
             <div className="app-container">
@@ -68,9 +77,7 @@ export default function App() {
                     }}
                 />
                 <main className="main-content">
-                    {abaTutor === 'inicio' && (
-                        <TutorHome onNavegar={(destino) => setAbaTutor(destino)} />
-                    )}
+                    {abaTutor === 'inicio' && <TutorHome onNavegar={(destino) => setAbaTutor(destino)} />}
                     {abaTutor === 'meus-pets' && (
                         <TutorMeusPets
                             onCadastrarOutroPet={() => setAbaTutor('cadastrar-pet')}
@@ -117,23 +124,63 @@ export default function App() {
         );
     }
 
-    // FLUXO DA CLÍNICA
+    // 3. FLUXO DA CLÍNICA
     return (
         <div className="app-container">
             <Navbar
-                aba={abaClinica}
-                setAba={setAbaClinica}
+                abaAtiva={abaClinica}
+                setAbaAtiva={setAbaClinica}
                 usuario={usuarioLogado}
                 onLogout={() => {
                     setUsuarioLogado(null);
                     setTelaAtual('login');
                 }}
             />
+
             <main className="main-content">
-                {abaClinica === 'painel' && <PainelRecepcionista />}
-                {abaClinica === 'cadastro' && <CadastroTutorPet />}
-                {abaClinica === 'agendamento' && <AgendamentoForm />}
+                {abaClinica === 'painel' && (
+                    <PainelRecepcionista
+                        onNovoAgendamento={() => setAbaClinica('agendamento-clinica')}
+                    />
+                )}
+                {abaClinica === 'agenda-semanal' && (
+                    <AgendaSemanal
+                        onNovaConsulta={() => setAbaClinica('agendamento-clinica')}
+                    />
+                )}
+                {abaClinica === 'tutores-pets' && (
+                    <GestaoTutoresPets
+                        onVerProntuario={() => setAbaClinica('historico')}
+                        onNovoTutor={() => setAbaClinica('cadastro-tutor')}
+                    />
+                )}
+                {abaClinica === 'lembretes' && <LembretesRecepcao />}
                 {abaClinica === 'historico' && <HistoricoPet />}
+                {abaClinica === 'veterinarios' && <Veterinarios />}
+
+                {/* Telas Funcionais de Ação */}
+                {abaClinica === 'agendamento-clinica' && (
+                    <div className="clinica-container">
+            <span
+                style={{ cursor: 'pointer', color: 'var(--color-primary)', fontWeight: 700, marginBottom: '16px', display: 'inline-block' }}
+                onClick={() => setAbaClinica('painel')}
+            >
+              ← Voltar ao Painel
+            </span>
+                        <AgendamentoForm />
+                    </div>
+                )}
+                {abaClinica === 'cadastro-tutor' && (
+                    <div className="clinica-container">
+            <span
+                style={{ cursor: 'pointer', color: 'var(--color-primary)', fontWeight: 700, marginBottom: '16px', display: 'inline-block' }}
+                onClick={() => setAbaClinica('tutores-pets')}
+            >
+              ← Voltar para Tutores e Pets
+            </span>
+                        <CadastroTutorPet onCadastroSucesso={() => setAbaClinica('tutores-pets')} />
+                    </div>
+                )}
             </main>
         </div>
     );
