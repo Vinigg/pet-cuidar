@@ -15,11 +15,23 @@ Stack escolhida pelo grupo:
 
 ```
 pet-cuidar/
-├── backend/    -> API REST em Spring Boot
-├── frontend/   -> aplicacao React (Create React App)
+├── backend/                -> API REST em Spring Boot
+├── frontend/               -> aplicacao React (Create React App)
+├── microservico-predicao/  -> servico Python (FastAPI) de predicao de no-show
+├── docs/                   -> contratos, regras e roteiros
+├── docker-compose.yml      -> back-end + predicao rodando juntos
 ├── README.md
-└── DEPLOY.md   -> notas de deploy na AWS
+└── DEPLOY.md               -> notas de deploy na AWS
 ```
+
+## Rodando tudo junto (Docker)
+
+```bash
+docker compose up --build   # back-end em http://localhost:8080 + predicao (rede interna)
+```
+
+Depois suba o front com `npm start` (secao abaixo). O roteiro de teste de
+ponta a ponta esta em [docs/teste-ponta-a-ponta.md](docs/teste-ponta-a-ponta.md).
 
 ## Rodando o back-end
 

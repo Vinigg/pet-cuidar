@@ -67,54 +67,78 @@ ACM.
 
 O cálculo do risco de falta roda num serviço Python separado, em
 `microservico-predicao/`. O back-end Spring Boot o consome por HTTP e, em caso
-de falha, timeout ou resposta inválida, usa o fallback "score indisponível", ou seja, o agendamento continua funcionando mesmo se este serviço estiver fora.
+de falha, timeout ou resposta inválida, usa o fallback "score indisponível"
+(`categoria: INDISPONIVEL`), ou seja, o agendamento continua funcionando mesmo
+se este serviço estiver fora.
 
 O modelo treinado (`model/modelo_noshow.joblib`) já vai versionado no
-repositório, então **não é necessário treinar no deploy**.
+repositório, então **não é necessário treinar no deploy**. Se o arquivo não
+estiver presente, o serviço **não sobe** e registra o motivo no log.
 
-### Opção A - Container (recomendada)
+O microserviço **não deve ficar público**: ele não tem autenticação e só o
+back-end precisa chamá-lo. Mantenha a porta 8000 fechada para a internet.
 
-O serviço já tem um `Dockerfile` pronto.
+### Deploy recomendado — EC2 única com Docker Compose (back-end + predição)
 
-1. Build e publicação da imagem (ex.: no **Amazon ECR**):
+Como o banco é SQLite em arquivo, o back-end já precisa rodar em **uma única
+instância**. Colocar o microserviço na mesma instância é o caminho mais simples
+e mais seguro: a comunicação fica na rede interna do Docker e nada além do
+back-end é exposto. O `docker-compose.yml` na raiz do repositório já faz isso.
+
+1. Criar uma EC2 (ex.: t3.small; a t3.micro fica justa para JVM + Python) com
+   Amazon Linux 2023 e instalar Docker e o plugin Compose.
+2. Security group: liberar **22** (só para o IP do time) e **80/443** (ou 8080,
+   se ficar sem proxy). **Não** liberar a 8000.
+3. Clonar o repositório na instância e criar um `.env` na raiz (não commitar):
    ```bash
-   cd microservico-predicao
-   docker build -t pet-cuidar-predicao .
-   # autenticar no ECR, criar o repositorio e dar push da imagem
+   APP_CORS_ALLOWED_ORIGIN=https://<dominio-do-cloudfront>
+   # opcionais (simuladores por padrao):
+   # LLM_PROVIDER=llm-externo
+   # LLM_API_KEY=...
+   # EMAIL_PROVIDER=resend
+   # RESEND_API_KEY=...
+   # EMAIL_FROM=...
+   # LEMBRETE_JOB_ENABLED=true
    ```
-2. Subir a imagem num serviço de container gerenciado (**AWS App Runner** ou
-   **ECS/Fargate**), expondo a porta **8000**.
-3. Anotar a URL pública gerada (ex.: `https://<id>.awsapprunner.com`).
-
-### Opção B - EC2 simples (mesma instância do back-end ou outra)
-
-1. Instalar Python 3.11+ na instância.
-2. Copiar a pasta `microservico-predicao/` e instalar as dependências:
+4. Subir:
    ```bash
-   cd microservico-predicao
-   pip install -r requirements.txt
+   docker compose up -d --build
+   docker compose ps          # predicao deve aparecer como "healthy"
    ```
-3. Rodar o serviço (de preferência atrás de Nginx, como `systemd` service):
-   ```bash
-   uvicorn app.main:app --host 0.0.0.0 --port 8000
-   ```
+5. HTTPS: colocar um Nginx com Let's Encrypt (ou um ALB com certificado do ACM)
+   na frente da porta 8080 do back-end. O front no CloudFront é HTTPS, então o
+   navegador bloqueia chamadas para um back-end só em HTTP.
+6. No build do front, `REACT_APP_API_URL=https://<dominio-do-back-end>`.
 
-### Ligando o back-end ao microserviço
+O back-end encontra o microserviço por `NOSHOW_PREDICTOR_BASE_URL=http://predicao:8000`,
+que o compose já define. O banco fica no volume `petcuidar-data` (`/data/petcuidar.db`
+dentro do container): é esse arquivo que entra na rotina de backup.
 
-Depois de publicar, aponte o back-end para a URL do serviço, definindo a
-variável de ambiente no Elastic Beanstalk/EC2 do back-end:
+### Alternativas
 
-- `NOSHOW_PREDICTOR_BASE_URL=https://<url-do-microservico>`
-
-Se a variável não for definida, o back-end usa o default `http://localhost:8000`
-(útil só em desenvolvimento, com os dois serviços na mesma máquina).
+- **Container gerenciado (App Runner ou ECS/Fargate):** o `Dockerfile` do
+  microserviço funciona como está (porta 8000, health check em `/health`).
+  Nesse caso o serviço precisa ficar em rede privada (VPC, sem URL pública),
+  acessível só pelo back-end, e `NOSHOW_PREDICTOR_BASE_URL` aponta para o
+  endereço interno.
+- **Sem Docker, na mesma EC2 do back-end:** instalar Python 3.12, rodar
+  `pip install -r requirements.txt` em `microservico-predicao/` e subir
+  `uvicorn app.main:app --host 127.0.0.1 --port 8000` como serviço `systemd`.
+  Escutando em `127.0.0.1`, a porta não fica exposta; o back-end usa o default
+  `http://localhost:8000` e não precisa de configuração.
 
 ### Verificação rápida
 
-- `GET https://<url-do-microservico>/health` deve responder
+- Na instância: `docker compose ps` deve mostrar o `predicao` como **healthy**
+  (o health check do container chama `/health`). Na alternativa sem Docker,
+  `curl -s http://localhost:8000/health` deve responder
   `{"status":"ok","modelo_carregado":true}`.
-- Se `modelo_carregado` vier `false`, o arquivo `model/modelo_noshow.joblib`
-  não subiu junto — inclua-o na imagem/instância.
+- Se o container `predicao` reiniciar em loop, veja `docker compose logs predicao`:
+  a mensagem "Modelo de no-show nao encontrado" indica que o `.joblib` não foi
+  copiado para a imagem.
+- Pelo navegador: no painel da recepção, consultas agendadas devem mostrar
+  "Baixo/Médio/Alto (xx%)". "Indisponível" em todas indica que o back-end não
+  está alcançando o microserviço.
 
 ## Banco de dados (SQLite) — limitacao importante
 
