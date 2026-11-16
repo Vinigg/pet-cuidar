@@ -67,3 +67,12 @@ def test_resposta_tem_o_contrato_esperado():
     body = r.json()
     assert set(body.keys()) == {"score", "categoria", "motivo"}
     assert body["categoria"] in {"BAIXO", "MEDIO", "ALTO"}
+
+
+def test_sem_modelo_falha_com_mensagem_clara(tmp_path):
+    """Sem o .joblib o servico nao pode fingir um score: deve falhar no startup."""
+    import pytest
+    from app.main import _carregar_modelo
+
+    with pytest.raises(RuntimeError, match="Modelo de no-show nao encontrado"):
+        _carregar_modelo(str(tmp_path / "nao-existe.joblib"))
