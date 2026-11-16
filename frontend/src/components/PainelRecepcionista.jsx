@@ -1,36 +1,73 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
+import { api, listarConsultasDoDia, obterPredicaoNoShow } from '../api/api';
 import { Button, Input, Badge } from './common/UIComponents';
 import ModalEnviarLembrete from './ModalEnviarLembrete';
+
+// Consultas que ainda podem faltar: so faz sentido pedir score para elas.
+const STATUS_COM_PREDICAO = ['AGENDADA', 'CONFIRMADA'];
+
+const ROTULOS_RISCO = {
+  ALTO: { variant: 'danger', texto: 'Alto' },
+  MEDIO: { variant: 'warning', texto: 'Médio' },
+  BAIXO: { variant: 'success', texto: 'Baixo' },
+};
 
 export default function PainelRecepcionista() {
   const [dataSelecionada, setDataSelecionada] = useState(new Date().toISOString().split('T')[0]);
   const [consultas, setConsultas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filtroTexto, setFiltroTexto] = useState('');
+  // { [consultaId]: PredicaoNoShowDTO | 'carregando' | 'erro' }
+  const [predicoes, setPredicoes] = useState({});
 
   const [modalLembreteAberto, setModalLembreteAberto] = useState(false);
   const [consultaSelecionada, setConsultaSelecionada] = useState(null);
 
-  const carregarConsultas = useCallback(async () => {
+  // Busca o score de cada consulta ativa. As chamadas sao sequenciais de
+  // proposito: cada uma grava a predicao no SQLite, que nao lida bem com
+  // escritas concorrentes. O volume (uma clinica, um dia) e pequeno.
+  const carregarPredicoes = useCallback(async (lista, cancelado) => {
+    const ativas = lista.filter(c => STATUS_COM_PREDICAO.includes(c.status));
+    setPredicoes(Object.fromEntries(ativas.map(c => [c.id, 'carregando'])));
+    for (const consulta of ativas) {
+      if (cancelado()) return;
+      let resultado;
+      try {
+        const response = await obterPredicaoNoShow(consulta.id);
+        resultado = response.data;
+      } catch (err) {
+        resultado = 'erro';
+      }
+      if (cancelado()) return;
+      setPredicoes(atual => ({ ...atual, [consulta.id]: resultado }));
+    }
+  }, []);
+
+  const carregarConsultas = useCallback(async (cancelado = () => false) => {
     setLoading(true);
     try {
-      const response = await axios.get(`http://localhost:8080/consultas?data=${dataSelecionada}`);
-      setConsultas(response.data || []);
+      const response = await listarConsultasDoDia(dataSelecionada);
+      if (cancelado()) return;
+      const lista = response.data || [];
+      setConsultas(lista);
+      carregarPredicoes(lista, cancelado);
     } catch (err) {
       console.error('Erro ao buscar consultas:', err);
     } finally {
       setLoading(false);
     }
-  }, [dataSelecionada]);
+  }, [dataSelecionada, carregarPredicoes]);
 
   useEffect(() => {
-    carregarConsultas();
+    // Ao trocar de data, descarta respostas atrasadas da data anterior.
+    let cancelado = false;
+    carregarConsultas(() => cancelado);
+    return () => { cancelado = true; };
   }, [carregarConsultas]);
 
   const handleAtualizarStatus = async (consultaId, novoStatus) => {
     try {
-      await axios.patch(`http://localhost:8080/consultas/${consultaId}/status`, {
+      await api.patch(`/consultas/${consultaId}/status`, {
         status: novoStatus
       });
       carregarConsultas();
@@ -54,26 +91,31 @@ export default function PainelRecepcionista() {
       c.tutorNome?.toLowerCase().includes(filtroTexto.toLowerCase())
   );
 
-  const renderRiscoBadge = (predicao) => {
-    if (!predicao) return <Badge variant="neutral">Sem Score</Badge>;
-    const score = predicao.score ?? 0;
-
-    if (score >= 0.7) {
+  // A categoria vem pronta do back-end/modelo (BAIXO < 0.25 <= MEDIO < 0.6 <= ALTO):
+  // o front nao recalcula faixas, para nunca divergir do que o modelo decidiu.
+  const renderRiscoBadge = (consulta) => {
+    if (!STATUS_COM_PREDICAO.includes(consulta.status)) {
+      return <Badge variant="neutral">—</Badge>;
+    }
+    const predicao = predicoes[consulta.id];
+    if (!predicao || predicao === 'carregando') {
+      return <Badge variant="neutral">Calculando...</Badge>;
+    }
+    const rotulo = predicao !== 'erro' && ROTULOS_RISCO[predicao.categoria];
+    if (!rotulo || predicao.score == null) {
+      // INDISPONIVEL, erro de rede ou resposta inesperada: nunca exibir como "Baixo".
       return (
-          <Badge variant="danger" title={predicao.motivo || 'Alto risco de no-show'}>
-            ● Alto ({Math.round(score * 100)}%)
-          </Badge>
-      );
-    } else if (score >= 0.4) {
-      return (
-          <Badge variant="warning" title={predicao.motivo || 'Médio risco de no-show'}>
-            ● Médio ({Math.round(score * 100)}%)
+          <Badge
+              variant="neutral"
+              title={predicao.motivo || 'Score indisponível no momento; confirme a presença normalmente.'}
+          >
+            Indisponível
           </Badge>
       );
     }
     return (
-        <Badge variant="success" title={predicao.motivo || 'Baixo risco de no-show'}>
-          ● Baixo ({Math.round(score * 100)}%)
+        <Badge variant={rotulo.variant} title={predicao.motivo}>
+          ● {rotulo.texto} ({Math.round(predicao.score * 100)}%)
         </Badge>
     );
   };
@@ -138,7 +180,7 @@ export default function PainelRecepcionista() {
                   onChange={(e) => setFiltroTexto(e.target.value)}
               />
             </div>
-            <Button variant="outlined" size="sm" onClick={carregarConsultas}>
+            <Button variant="outlined" size="sm" onClick={() => carregarConsultas()}>
               Atualizar Agenda
             </Button>
           </div>
@@ -171,7 +213,7 @@ export default function PainelRecepcionista() {
                       </td>
                       <td>{c.veterinarioNome || 'Dr(a). Veterinário(a)'}</td>
                       <td>{renderStatusBadge(c.status)}</td>
-                      <td>{renderRiscoBadge(c.predicaoNoShow)}</td>
+                      <td>{renderRiscoBadge(c)}</td>
                       <td>
                         <div className="actions-cell">
                           <Button
@@ -207,4 +249,4 @@ export default function PainelRecepcionista() {
         />
       </div>
   );
-}
+}
