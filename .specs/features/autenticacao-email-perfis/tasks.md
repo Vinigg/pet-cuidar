@@ -79,8 +79,8 @@ T6 → T7 → T8
 
 **Done when**:
 
-- [ ] Um código de entrada válido inicia sessão no perfil registrado. Sair invalida a credencial.
-- [ ] A verificação Full passa.
+- [x] Um código de entrada válido inicia sessão no perfil registrado. Sair invalida a credencial.
+- [x] A verificação Full passa.
 
 **Tests**: integration
 **Gate**: full
