@@ -1,5 +1,6 @@
 package com.petcuidar.auth;
 
+import com.petcuidar.dto.TutorCadastroDTO;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -43,12 +44,14 @@ public class AuthController {
     private final DesafioEmailService desafios;
     private final SessaoService sessoes;
     private final boolean cookieSeguro;
+    private final CadastroTutorService cadastro;
     private final Map<String, Limite> limites = new HashMap<>();
 
-    public AuthController(DesafioEmailService desafios, SessaoService sessoes,
+    public AuthController(DesafioEmailService desafios, SessaoService sessoes, CadastroTutorService cadastro,
                           @Value("${app.auth.secure-cookie:true}") boolean cookieSeguro) {
         this.desafios = desafios;
         this.sessoes = sessoes;
+        this.cadastro = cadastro;
         this.cookieSeguro = cookieSeguro;
     }
 
@@ -80,6 +83,19 @@ public class AuthController {
         sessoes.revogar(tokenAnterior);
         return resposta(HttpStatus.OK).header(HttpHeaders.SET_COOKIE,
                 cookie(COOKIE, emitida.token(), emitida.validade())).body(emitida.conta());
+    }
+
+    @PostMapping(value = "/cadastro", headers = CABECALHO + "=1")
+    public ResponseEntity<Conta> cadastrar(@Valid @RequestBody TutorCadastroDTO pedido,
+            @CookieValue(name = COOKIE_CADASTRO, required = false) String prova,
+            @CookieValue(name = COOKIE, required = false) String sessaoAnterior) {
+        var credencial = cadastro.concluir(pedido, prova);
+        sessoes.revogar(sessaoAnterior);
+        return resposta(HttpStatus.CREATED)
+                .header(HttpHeaders.SET_COOKIE,
+                        cookie(COOKIE, credencial.token(), credencial.validade()),
+                        cookie(COOKIE_CADASTRO, "", Duration.ZERO))
+                .body(credencial.conta());
     }
 
     @GetMapping("/sessao")

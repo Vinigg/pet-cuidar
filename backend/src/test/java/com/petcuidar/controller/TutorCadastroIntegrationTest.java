@@ -50,6 +50,8 @@ class TutorCadastroIntegrationTest {
 
     @BeforeEach
     void limparCadastros() {
+        banco.update("DELETE FROM credenciais_auth WHERE conta_id IN (SELECT id FROM contas WHERE perfil = 'TUTOR')");
+        banco.update("DELETE FROM contas WHERE perfil = 'TUTOR'");
         pets.deleteAll();
         tutores.deleteAll();
     }

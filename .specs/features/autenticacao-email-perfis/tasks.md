@@ -124,8 +124,8 @@ T6 → T7 → T8
 
 **Done when**:
 
-- [ ] A prova de cadastro é validada e consumida na criação transacional da conta e dos pets.
-- [ ] A verificação Full passa.
+- [x] A prova de cadastro é validada e consumida na criação transacional da conta e dos pets.
+- [x] A verificação Full passa.
 
 **Tests**: integration
 **Gate**: full

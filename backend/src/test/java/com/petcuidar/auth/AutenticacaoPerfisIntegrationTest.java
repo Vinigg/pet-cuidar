@@ -197,6 +197,62 @@ class AutenticacaoPerfisIntegrationTest {
         System.out.println("PASS C18 e-mail conflitante retorna 409");
     }
 
+    @Test
+    void cadastroVerificaEmailAntesDeCriarTutorESessao() throws Exception {
+        String email = UUID.randomUUID() + "@example.com";
+        String outroEmail = UUID.randomUUID() + "@example.com";
+        String pedido = """
+                {"nome":"Nova tutora","email":"%s","perfil":"ADMIN",
+                 "pets":[{"nome":"Novo cão","especie":"Cachorro"}]}
+                """.formatted(outroEmail);
+
+        mvc.perform(post("/auth/cadastro").header("X-Pet-Cuidar", "1")
+                        .contentType("application/json").content(pedido))
+                .andExpect(status().isUnauthorized());
+        org.junit.jupiter.api.Assertions.assertEquals(0,
+                banco.queryForObject("SELECT count(*) FROM tutores WHERE email IN (?, ?)", Integer.class,
+                        email, outroEmail));
+        System.out.println("PASS C19 autocadastro sem prova não grava dados");
+
+        String codigo = solicitar(email, "CADASTRO");
+        var verificado = mvc.perform(post("/auth/verificar").header("X-Pet-Cuidar", "1")
+                        .contentType("application/json")
+                        .content(solicitacao(email, "CADASTRO").replace("}", ",\"codigo\":\"" + codigo + "\"}")))
+                .andExpect(status().isOk()).andExpect(cookie().exists("pc_cadastro"))
+                .andExpect(cookie().doesNotExist("pc_sessao")).andReturn().getResponse();
+        Cookie prova = verificado.getCookie("pc_cadastro");
+        mvc.perform(get("/pets/meus").cookie(new Cookie("pc_sessao", prova.getValue())))
+                .andExpect(status().isUnauthorized());
+        var resultado = mvc.perform(post("/auth/cadastro").header("X-Pet-Cuidar", "1").cookie(prova)
+                        .contentType("application/json").content(pedido))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.perfil").value("TUTOR"))
+                .andExpect(jsonPath("$.email").value(email)).andExpect(cookie().maxAge("pc_cadastro", 0))
+                .andReturn().getResponse();
+        mvc.perform(get("/pets/meus").cookie(resultado.getCookie("pc_sessao")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].nome").value("Novo cão"));
+        mvc.perform(post("/auth/cadastro").header("X-Pet-Cuidar", "1").cookie(prova)
+                        .contentType("application/json").content(pedido))
+                .andExpect(status().isUnauthorized());
+        System.out.println("PASS C20 autocadastro usa e-mail verificado e perfil Tutor");
+    }
+
+    @Test
+    void emailAmbiguoNaoPodeEntrarNemSerRecadastrado() throws Exception {
+        String email = UUID.randomUUID() + "@example.com";
+        banco.update("INSERT INTO tutores (nome, email) VALUES ('Primeiro', ?), ('Segundo', ?)",
+                email, email.toUpperCase(java.util.Locale.ROOT));
+        for (String finalidade : new String[]{"LOGIN", "CADASTRO"}) {
+            mvc.perform(post("/auth/codigo").header("X-Pet-Cuidar", "1").contentType("application/json")
+                            .content(solicitacao(email, finalidade))).andExpect(status().isAccepted());
+            mvc.perform(post("/auth/verificar").header("X-Pet-Cuidar", "1").contentType("application/json")
+                            .content(solicitacao(email, finalidade).replace("}", ",\"codigo\":\"11111111\"}")))
+                    .andExpect(status().isUnauthorized());
+        }
+        org.mockito.Mockito.verify(remetente, org.mockito.Mockito.after(400).never()).enviar(
+                org.mockito.ArgumentMatchers.eq(email), anyString(), anyString(), anyString());
+        System.out.println("PASS C27 e-mail ambíguo não permite autenticação");
+    }
+
     private String novoColaborador() {
         String email = UUID.randomUUID() + "@example.com";
         banco.update("INSERT INTO contas (email, nome, perfil) VALUES (?, 'Ana', 'COLABORADOR')", email);
