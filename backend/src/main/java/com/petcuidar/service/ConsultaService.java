@@ -85,6 +85,17 @@ public class ConsultaService {
                 .collect(Collectors.toList());
     }
 
+    public List<ConsultaResponseDTO> listarDoTutor(Long tutorId) {
+        return consultaRepository.findByPetTutorIdOrderByDataHoraDesc(tutorId)
+                .stream().map(ConsultaResponseDTO::from).toList();
+    }
+
+    public List<ConsultaResponseDTO> listarDoVeterinario(LocalDate data, Long veterinarioId) {
+        return consultaRepository.findByVeterinarioIdAndDataHoraBetweenOrderByDataHoraAsc(
+                veterinarioId, data.atStartOfDay(), data.atTime(LocalTime.MAX))
+                .stream().map(ConsultaResponseDTO::from).toList();
+    }
+
     @Transactional
     public ConsultaResponseDTO atualizarStatus(Long consultaId, StatusConsulta status) {
         Consulta consulta = buscarConsulta(consultaId);

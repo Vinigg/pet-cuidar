@@ -94,8 +94,8 @@ T6 → T7 → T8
 
 **Done when**:
 
-- [ ] A API rejeita chamadas sem sessão, perfis sem autorização e recursos fora do vínculo da conta.
-- [ ] A verificação Full passa.
+- [x] A API rejeita chamadas sem sessão, perfis sem autorização e recursos fora do vínculo da conta.
+- [x] A verificação Full passa.
 
 **Tests**: integration
 **Gate**: full

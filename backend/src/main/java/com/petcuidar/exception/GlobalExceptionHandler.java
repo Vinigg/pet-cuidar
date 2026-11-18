@@ -136,6 +136,7 @@ public class GlobalExceptionHandler {
 
     private static String mensagemPadrao(HttpStatusCode status) {
         return switch (status.value()) {
+            case 403 -> "Acesso negado.";
             case 404 -> "Recurso nao encontrado.";
             case 405 -> "Metodo HTTP nao suportado para este recurso.";
             case 406 -> "Formato de resposta solicitado nao suportado.";

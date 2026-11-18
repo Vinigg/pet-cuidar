@@ -1,5 +1,8 @@
 package com.petcuidar.controller;
 
+import com.petcuidar.auth.Acesso;
+import com.petcuidar.auth.Permissao;
+import static com.petcuidar.auth.Perfil.*;
 import com.petcuidar.dto.*;
 import com.petcuidar.service.AgendaVeterinarioService;
 import com.petcuidar.service.VeterinarioService;
@@ -13,6 +16,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/veterinarios")
+@Permissao(ADMIN)
 public class VeterinarioController {
 
     private final VeterinarioService veterinarioService;
@@ -24,8 +28,13 @@ public class VeterinarioController {
     }
 
     @GetMapping
-    public List<VeterinarioResponseDTO> listar(@RequestParam(defaultValue = "true") boolean ativo) {
-        return veterinarioService.listar(ativo);
+    @Permissao({ADMIN, COLABORADOR, TUTOR, VETERINARIO})
+    public List<VeterinarioResponseDTO> listar(@RequestParam(defaultValue = "true") boolean ativo,
+            @RequestAttribute(name = Acesso.ATRIBUTO, required = false) Acesso acesso) {
+        if (acesso != null && acesso.eh(VETERINARIO)) {
+            return List.of(veterinarioService.obter(acesso.conta().veterinarioId()));
+        }
+        return veterinarioService.listar(acesso != null && !acesso.eh(ADMIN) || ativo);
     }
 
     @GetMapping("/{id}")
@@ -79,6 +88,7 @@ public class VeterinarioController {
 
     // GET /veterinarios/{id}/disponibilidade?data=2026-09-22
     @GetMapping("/{id}/disponibilidade")
+    @Permissao({ADMIN, COLABORADOR, TUTOR})
     public List<DisponibilidadeDTO> disponibilidade(
             @PathVariable Long id,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate data) {

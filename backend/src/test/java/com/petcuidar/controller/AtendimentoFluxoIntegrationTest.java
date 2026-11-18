@@ -1,5 +1,8 @@
 package com.petcuidar.controller;
 
+import com.petcuidar.auth.Perfil;
+import com.petcuidar.auth.SessaoTeste;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.petcuidar.model.*;
 import com.petcuidar.repository.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,6 +48,7 @@ class AtendimentoFluxoIntegrationTest {
     }
 
     @Autowired MockMvc mvc;
+    @Autowired JdbcTemplate banco;
     @Autowired ConsultaRepository consultas;
     @Autowired PetRepository pets;
     @Autowired TutorRepository tutores;
@@ -94,7 +98,7 @@ class AtendimentoFluxoIntegrationTest {
     @Test
     void consultaCanceladaResponde409ENaoGravaNada() throws Exception {
         Consulta c = consulta(pet);
-        mvc.perform(patch("/consultas/" + c.getId() + "/status").contentType(APPLICATION_JSON)
+        mvc.perform(patch("/consultas/" + c.getId() + "/status").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR)).contentType(APPLICATION_JSON)
                 .content("{\"status\":\"CANCELADA\"}")).andExpect(status().isOk());
 
         registrar(pet.getId(), c.getId())
@@ -138,7 +142,7 @@ class AtendimentoFluxoIntegrationTest {
     private ResultActions registrar(Long petId, Long consultaId) throws Exception {
         String corpo = "{\"petId\":" + petId + ",\"consultaId\":" + consultaId + ",\"veterinarioId\":" + vet.getId()
                 + ",\"descricaoClinica\":\"Otite leve, tratamento topico prescrito.\"}";
-        return mvc.perform(post("/atendimentos").contentType(APPLICATION_JSON).content(corpo));
+        return mvc.perform(post("/atendimentos").with(SessaoTeste.assumir(banco, Perfil.VETERINARIO, vet.getId())).contentType(APPLICATION_JSON).content(corpo));
     }
 
     private Pet novoPet(String nome, Tutor tutor) {

@@ -26,6 +26,7 @@ import static com.petcuidar.auth.SessaoService.normalizarEmail;
 
 @RestController
 @RequestMapping("/auth")
+@Permissao(publica = true)
 public class AuthController {
     public static final String CABECALHO = "X-Pet-Cuidar";
     private static final String MENSAGEM_ENVIO = "Se o endereço estiver apto, você receberá um código por e-mail.";

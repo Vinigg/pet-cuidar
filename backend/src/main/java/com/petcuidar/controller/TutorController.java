@@ -1,5 +1,8 @@
 package com.petcuidar.controller;
 
+import com.petcuidar.auth.Permissao;
+import static com.petcuidar.auth.Perfil.COLABORADOR;
+
 import com.petcuidar.dto.TutorCadastroDTO;
 import com.petcuidar.dto.TutorResponseDTO;
 import com.petcuidar.service.TutorService;
@@ -9,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/tutores")
+@Permissao(COLABORADOR)
 public class TutorController {
 
     private final TutorService tutorService;
