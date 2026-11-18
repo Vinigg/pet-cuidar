@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { concluirCadastroTutor } from '../api/api';
 import { Button, Input } from './common/UIComponents';
+import { formatarCpf, formatarTelefone, somenteDigitos } from '../utils/validacaoCadastro';
 
 export default function CriarContaTutor({ email, onContaCriada, onVoltarLogin }) {
     const [tutor, setTutor] = useState({ nome: '', email, telefone: '', cpf: '' });
@@ -34,6 +35,8 @@ export default function CriarContaTutor({ email, onContaCriada, onVoltarLogin })
         try {
             const { data } = await concluirCadastroTutor({
                 ...tutor,
+                telefone: somenteDigitos(tutor.telefone),
+                cpf: somenteDigitos(tutor.cpf),
                 pets: pets.map((pet) => ({ ...pet, idade: pet.idade ? Number(pet.idade) : null }))
             });
             onContaCriada(data);
@@ -87,16 +90,21 @@ export default function CriarContaTutor({ email, onContaCriada, onVoltarLogin })
                         <div className="form-grid-2">
                             <Input
                                 label="TELEFONE / WHATSAPP *"
+                                type="tel"
+                                autoComplete="tel-national"
+                                maxLength={15}
                                 placeholder="(11) 99999-9999"
                                 value={tutor.telefone}
-                                onChange={(e) => setTutor({ ...tutor, telefone: e.target.value })}
+                                onChange={(e) => setTutor({ ...tutor, telefone: formatarTelefone(e.target.value) })}
                                 required
                             />
                             <Input
                                 label="CPF *"
+                                inputMode="numeric"
+                                maxLength={14}
                                 placeholder="000.000.000-00"
                                 value={tutor.cpf}
-                                onChange={(e) => setTutor({ ...tutor, cpf: e.target.value })}
+                                onChange={(e) => setTutor({ ...tutor, cpf: formatarCpf(e.target.value) })}
                                 required
                             />
                         </div>

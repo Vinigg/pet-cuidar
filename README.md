@@ -26,6 +26,8 @@ pet-cuidar/
 
 ## Rodando tudo junto (Docker)
 
+Na primeira configuração, copie o [exemplo da raiz](.env.example) para `.env` ao lado do `docker-compose.yml`. Preencha os valores locais nesse arquivo. Depois inicie o back-end e o serviço de predição.
+
 ```bash
 docker compose up --build   # back-end em http://localhost:8080 + predicao (rede interna)
 ```
@@ -35,17 +37,36 @@ ponta a ponta esta em [docs/teste-ponta-a-ponta.md](docs/teste-ponta-a-ponta.md)
 
 ## Rodando o back-end
 
-Pre-requisitos: Java 17+ e Maven.
+Pré-requisitos de Java 17 e Maven.
+
+Na primeira configuração, copie [backend/.env.example](backend/.env.example) para `backend/.env`. Preencha o arquivo local com valores sem aspas. O perfil `local` carrega esse arquivo quando você inicia a API de dentro de `backend/`.
 
 ```bash
 cd backend
-mvn spring-boot:run
+mvn spring-boot:run "-Dspring-boot.run.profiles=local"
 ```
 
-A API sobe em `http://localhost:8080`. O banco SQLite (`petcuidar.db`) e criado
-automaticamente na raiz de `backend/` na primeira execucao, com dois
-veterinarios de exemplo (`DataSeeder`).
+A API abre em `http://localhost:8080`. O exemplo usa o banco SQLite `petcuidar-login-teste.db` dentro de `backend/`.
 
+### E-mails locais com Mailpit
+
+Os exemplos de ambiente usam o provedor SMTP e a caixa local Mailpit. Para subir os serviços com Docker, execute na raiz.
+
+```bash
+docker compose --profile local-email up -d --build
+```
+
+Abra http://localhost:8025 para ver os códigos enviados. Use o e-mail de `AUTH_ADMIN_EMAIL` na entrada do Admin. Para testar Tutor, use **Criar conta de tutor** com outro endereço, como `tutor@petcuidar.local`, e leia o código na mesma caixa Mailpit. O Admin cadastra colaboradores e vincula veterinários em **Contas da equipe**. Cada perfil precisa de um endereço próprio.
+
+Para executar a API pelo Maven, inicie apenas o Mailpit com Docker e use `SMTP_HOST=localhost` no `backend/.env`.
+
+```bash
+docker compose --profile local-email up -d mailpit
+cd backend
+mvn spring-boot:run "-Dspring-boot.run.profiles=local"
+```
+
+Dentro do Compose, o back-end usa `SMTP_HOST=mailpit`. O Mailpit captura mensagens de qualquer destinatário e permite ler os códigos no navegador. As portas da caixa de desenvolvimento estão vinculadas ao endereço local da máquina.
 ### Cadastro e escala de veterinarios
 
 A API permite cadastrar/editar/inativar profissionais, manter periodos semanais
@@ -76,7 +97,7 @@ A aplicação sobe em `http://localhost:3000`. Em desenvolvimento, o React encam
 
 ## Login e painéis
 
-Informe o e-mail cadastrado e digite o código de oito dígitos recebido. O código vale por dez minutos e só pode ser usado uma vez. Para testar localmente com entrega de e-mail, inicie o back-end com `AUTH_ADMIN_EMAIL`, `AUTH_SECURE_COOKIE=false`, `EMAIL_PROVIDER=resend`, `RESEND_API_KEY` e `EMAIL_FROM`. O provedor `local` simula o envio.
+Informe o e-mail cadastrado e digite o código de oito dígitos recebido. O código vale por dez minutos e só pode ser usado uma vez. Com `EMAIL_PROVIDER=smtp`, os códigos ficam na caixa Mailpit em http://localhost:8025. Para entrega externa, configure `EMAIL_PROVIDER=resend`, `EMAIL_FROM` e `RESEND_API_KEY`. O provedor `local` apenas simula o envio.
 
 | Perfil | Área |
 | --- | --- |

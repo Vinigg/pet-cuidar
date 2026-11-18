@@ -25,6 +25,7 @@ export const cadastrarTutor = (dados) => api.post("/tutores", dados);
 export const listarPets = (tutorId) => api.get("/pets", { params: { tutorId } });
 
 // ---- Veterinarios ----
+export const obterMinhaAgenda = (data) => api.get("/veterinarios/minha-agenda", { params: { data } });
 export const listarVeterinarios = (params) => api.get("/veterinarios", { params });
 export const cadastrarVeterinario = (dados) => api.post("/veterinarios", dados);
 export const obterVeterinario = (id) => api.get(`/veterinarios/${id}`);

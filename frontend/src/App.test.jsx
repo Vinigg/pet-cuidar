@@ -1,7 +1,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
-import { consultarSessao, concluirCadastroTutor, sair, solicitarCodigo, verificarCodigo } from './api/api';
+import { consultarSessao, concluirCadastroTutor, sair, solicitarCodigo, verificarCodigo, obterMinhaAgenda } from './api/api';
 
 jest.mock('./api/api', () => ({
     api: { interceptors: { response: { use: jest.fn(), eject: jest.fn() } } },
@@ -14,7 +14,8 @@ jest.mock('./api/api', () => ({
     listarMinhasConsultas: jest.fn(async () => ({ data: [] })),
     listarPets: jest.fn(async () => ({ data: [] })),
     listarVeterinarios: jest.fn(async () => ({ data: [] })),
-    listarEquipe: jest.fn(async () => ({ data: [] }))
+    listarEquipe: jest.fn(async () => ({ data: [] })),
+    obterMinhaAgenda: jest.fn(async () => ({ data: { horarios: [], consultas: [] } }))
 }));
 jest.mock('./components/PainelRecepcionista', () => () => <h1>Agenda da recepção</h1>);
 const mockMontarHistorico = jest.fn();
@@ -36,6 +37,7 @@ let root;
 
 beforeEach(() => {
     jest.clearAllMocks();
+    obterMinhaAgenda.mockResolvedValue({ data: { horarios: [], consultas: [] } });
     global.IS_REACT_ACT_ENVIRONMENT = true;
     window.history.replaceState(null, '', '#/');
     container = document.createElement('div');
@@ -90,7 +92,7 @@ test('C4 recarregar restaura o perfil a partir do servidor', async () => {
 
 test.each([
     ['C5 Tutor vê somente sua navegação', 'TUTOR', ['Início', 'Meus pets', 'Consultas'], 'Olá, Ana!'],
-    ['C6 Veterinário vê somente sua navegação', 'VETERINARIO', ['Histórico do pet', 'Registrar atendimento'], 'Histórico veterinário'],
+    ['C6 Veterinário vê somente sua navegação', 'VETERINARIO', ['Minha agenda', 'Histórico do pet', 'Registrar atendimento'], 'Histórico veterinário'],
     ['C7 Colaborador vê somente sua navegação', 'COLABORADOR', ['Painel do dia', 'Agendar consulta', 'Cadastro'], 'Agenda da recepção'],
     ['C8 Admin vê somente a gestão de equipe', 'ADMIN', ['Veterinários', 'Contas da equipe'], 'Gestão de veterinários']
 ])('%s', async (_, perfil, esperado, titulo) => {
@@ -108,6 +110,9 @@ test.each([
         expect(window.location.hash).toBe('#/tutor/agendar-consulta');
         expect(container.querySelector('main h1').textContent).toBe('Agendar Consulta');
     } else if (perfil === 'VETERINARIO') {
+        await clicar('Minha agenda');
+        expect(window.location.hash).toBe('#/veterinario/agenda');
+        expect(container.querySelector('main h1').textContent).toBe('Minha agenda');
         await clicar('Registrar atendimento');
         expect(window.location.hash).toBe('#/veterinario/atendimentos');
         expect(container.querySelector('main h1').textContent).toBe('Atendimento veterinário');
@@ -176,12 +181,25 @@ test('C21 conclusão do autocadastro abre painel do Tutor', async () => {
     expect(verificarCodigo).toHaveBeenCalledWith('ana@example.com', 'CADASTRO', '12345678');
     expect(concluirCadastroTutor).not.toHaveBeenCalled();
     await preencher('NOME COMPLETO *', 'Ana');
+    await preencher('TELEFONE / WHATSAPP *', 'abc81999991234567890');
+    expect(container.querySelector('input[type="tel"]').value).toBe('(81) 99999-1234');
+    await preencher('TELEFONE / WHATSAPP *', '8133334444');
+    expect(container.querySelector('input[type="tel"]').value).toBe('(81) 3333-4444');
+    await preencher('CPF *', 'abc123456789091234567');
+    expect(container.querySelector('input[placeholder="000.000.000-00"]').value).toBe('123.456.789-09');
+    await preencher('TELEFONE / WHATSAPP *', '');
+    await preencher('CPF *', '');
+    expect(container.querySelector('input[type="tel"]').value).toBe('');
+    expect(container.querySelector('input[placeholder="000.000.000-00"]').value).toBe('');
     await preencher('TELEFONE / WHATSAPP *', '11999990000');
     await preencher('CPF *', '12345678909');
+    expect(container.querySelector('input[type="tel"]').value).toBe('(11) 99999-0000');
+    expect(container.querySelector('input[placeholder="000.000.000-00"]').value).toBe('123.456.789-09');
     await preencher('NOME DO PET *', 'Rex');
     await clicar('Concluir Cadastro & Entrar');
 
     expect(concluirCadastroTutor).toHaveBeenCalledWith(expect.objectContaining({ email: 'ana@example.com',
+        telefone: '11999990000', cpf: '12345678909',
         pets: [expect.objectContaining({ nome: 'Rex' })] }));
     expect(window.location.hash).toBe('#/tutor/inicio');
     expect(container.querySelector('main h1').textContent).toBe('Olá, Ana!');

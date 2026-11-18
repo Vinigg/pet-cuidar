@@ -34,6 +34,10 @@ class AutenticacaoPerfisIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate banco;
     @MockBean EmailSender remetente;
+    @Autowired com.petcuidar.repository.ConsultaRepository consultasAgenda;
+    @Autowired com.petcuidar.repository.PetRepository petsAgenda;
+    @Autowired com.petcuidar.repository.VeterinarioRepository veterinariosAgenda;
+    @Autowired com.petcuidar.repository.BloqueioAgendaVeterinarioRepository bloqueiosAgenda;
 
     @Test
     void loginUsaPerfilDoServidorESairRevogaSessao() throws Exception {
@@ -171,6 +175,60 @@ class AutenticacaoPerfisIntegrationTest {
         mvc.perform(get("/atendimentos/{id}", idExterno).cookie(sessaoDoOutro)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.descricaoClinica").value("Observações clínicas."));
         System.out.println("PASS C14 Veterinário só manipula atendimentos vinculados");
+    }
+
+    @Test
+    void minhaAgendaMostraGradeReservasEBloqueiosSomenteDoVeterinarioAutenticado() throws Exception {
+        long vet = novoVeterinario(), outroVet = novoVeterinario();
+        long pet = novoPet(novoTutor(), "Paciente da agenda");
+        long consulta = consultaDaAgenda(pet, vet);
+        consultaDaAgenda(novoPet(novoTutor(), "Paciente de outro profissional"), outroVet);
+        banco.update("""
+                INSERT INTO horarios_atendimento_veterinario (veterinario_id, dia_semana, hora_inicio, hora_fim)
+                VALUES (?, 'MONDAY', '10:00', '12:00')
+                """, vet);
+        bloqueiosAgenda.saveAndFlush(new com.petcuidar.model.BloqueioAgendaVeterinario(
+                veterinariosAgenda.findById(vet).orElseThrow(),
+                java.time.LocalDateTime.parse("2024-01-15T11:00:00"),
+                java.time.LocalDateTime.parse("2024-01-15T11:30:00"), "Intervalo"));
+        Cookie cookie = contaDeTeste("VETERINARIO", null, vet);
+        mvc.perform(get("/veterinarios/minha-agenda").cookie(cookie)
+                        .param("data", "2024-01-15").param("veterinarioId", String.valueOf(outroVet)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value("2024-01-15"))
+                .andExpect(jsonPath("$.consultas.length()").value(1))
+                .andExpect(jsonPath("$.consultas[0].id").value(consulta))
+                .andExpect(jsonPath("$.consultas[0].veterinarioId").value(vet))
+                .andExpect(jsonPath("$.horarios.length()").value(4))
+                .andExpect(jsonPath("$.horarios[0].horario").value("2024-01-15T10:00:00"))
+                .andExpect(jsonPath("$.horarios[0].disponivel").value(false))
+                .andExpect(jsonPath("$.horarios[1].disponivel").value(true))
+                .andExpect(jsonPath("$.horarios[2].disponivel").value(false))
+                .andExpect(jsonPath("$.horarios[3].disponivel").value(true));
+        banco.update("UPDATE consultas SET status = 'CANCELADA' WHERE id = ?", consulta);
+        mvc.perform(get("/veterinarios/minha-agenda").cookie(cookie).param("data", "2024-01-15"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.horarios[0].disponivel").value(true))
+                .andExpect(jsonPath("$.consultas[0].status").value("CANCELADA"));
+        mvc.perform(get("/veterinarios/minha-agenda").cookie(cookie).param("data", "2024-01-16"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.horarios.length()").value(0))
+                .andExpect(jsonPath("$.consultas.length()").value(0));
+        mvc.perform(get("/veterinarios/minha-agenda").cookie(cookie).param("data", "invalida"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/veterinarios/minha-agenda").param("data", "2024-01-15"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/veterinarios/minha-agenda").cookie(contaDeTeste("ADMIN", null, null))
+                        .param("data", "2024-01-15"))
+                .andExpect(status().isForbidden());
+    }
+
+    private long consultaDaAgenda(long pet, long veterinario) {
+        var consulta = new com.petcuidar.model.Consulta();
+        consulta.setPet(petsAgenda.findById(pet).orElseThrow());
+        consulta.setVeterinario(veterinariosAgenda.findById(veterinario).orElseThrow());
+        consulta.setDataHora(java.time.LocalDateTime.parse("2024-01-15T10:00:00"));
+        return consultasAgenda.saveAndFlush(consulta).getId();
     }
 
     private Cookie contaDeTeste(String perfil, Long tutor, Long veterinario) {

@@ -9,6 +9,14 @@
 # O microservico NAO publica porta no host: so o back-end fala com ele, pela
 # rede interna do compose (http://predicao:8000).
 services:
+  mailpit:
+    image: axllent/mailpit:v1.27.4
+    profiles: ["local-email"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+
   predicao:
     build: ./microservico-predicao
     restart: unless-stopped
@@ -32,6 +40,8 @@ services:
       IA_OPENAI_BASE_URL: ${IA_OPENAI_BASE_URL:-https://api.openai.com/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}
       EMAIL_PROVIDER: ${EMAIL_PROVIDER:-local}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-no-reply@petcuidar.local}
       LEMBRETE_JOB_ENABLED: ${LEMBRETE_JOB_ENABLED:-false}

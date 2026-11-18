@@ -11,6 +11,7 @@ import AgendamentoForm from './components/AgendamentoForm';
 import HistoricoPet from './components/HistoricoPet';
 import FormularioAtendimento from './components/FormularioAtendimento';
 import Veterinarios from './components/Veterinarios';
+import MinhaAgenda from './components/MinhaAgenda';
 import Equipe from './components/Equipe';
 import { Button } from './components/common/UIComponents';
 
@@ -19,6 +20,7 @@ const paineis = {
     VETERINARIO: {
         prefixo: 'veterinario', nome: 'Veterinário', inicio: 'historico',
         abas: [
+            { id: 'agenda', label: 'Minha agenda', Tela: MinhaAgenda },
             { id: 'historico', label: 'Histórico do pet', Tela: HistoricoPet },
             { id: 'atendimentos', label: 'Registrar atendimento', Tela: FormularioAtendimento }
         ]

@@ -63,10 +63,18 @@ public class AgendaVeterinarioService {
     }
 
     public List<DisponibilidadeDTO> listarDisponibilidade(Long veterinarioId, LocalDate data) {
+        return listarGrade(veterinarioId, data, false);
+    }
+
+    public List<DisponibilidadeDTO> listarGradeDoDia(Long veterinarioId, LocalDate data) {
+        return listarGrade(veterinarioId, data, true);
+    }
+
+    private List<DisponibilidadeDTO> listarGrade(Long veterinarioId, LocalDate data, boolean incluirPassados) {
         Veterinario veterinario = veterinarios.findById(veterinarioId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Veterinario nao encontrado: id " + veterinarioId));
         LocalDateTime agora = agora();
-        if (!veterinario.isAtivo() || data.isBefore(agora.toLocalDate())) {
+        if (!veterinario.isAtivo() || !incluirPassados && data.isBefore(agora.toLocalDate())) {
             return List.of();
         }
         Set<LocalDateTime> ocupados = consultas
@@ -80,7 +88,7 @@ public class AgendaVeterinarioService {
             if (periodo.getDiaSemana() != data.getDayOfWeek()) continue;
             for (LocalDateTime cursor = data.atTime(periodo.getHoraInicio()); periodo.atende(cursor);
                  cursor = cursor.plusMinutes(HorarioAtendimentoVeterinario.DURACAO_MINUTOS)) {
-                if (!cursor.isBefore(agora)) grade.add(cursor);
+                if (incluirPassados || !cursor.isBefore(agora)) grade.add(cursor);
             }
         }
         return grade.stream().map(horario -> new DisponibilidadeDTO(horario, !ocupados.contains(horario)
