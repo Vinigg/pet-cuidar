@@ -68,17 +68,17 @@ class VeterinarioAgendaIntegrationTest {
         void migraBancoVazioSemDependerDoHibernate() throws Exception {
                 String bancoVazio = "jdbc:sqlite:target/agenda-vazio-" + UUID.randomUUID() + ".db";
                 Flyway migrador = Flyway.configure().dataSource(bancoVazio, null, null).load();
-                assertEquals(5, migrador.migrate().migrationsExecuted);
+                assertEquals(6, migrador.migrate().migrationsExecuted);
                 try (var connection = DriverManager.getConnection(bancoVazio);
                          var statement = connection.createStatement();
                          var resultado = statement.executeQuery("""
                                          SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN (
                                                  'tutores', 'pets', 'veterinarios', 'consultas', 'historico_atendimentos',
                                                  'lembretes', 'predicoes_no_show', 'horarios_atendimento_veterinario',
-                                                 'bloqueios_agenda_veterinario')
+                                                 'bloqueios_agenda_veterinario', 'contas', 'desafios_email', 'credenciais_auth')
                                          """)) {
                         assertTrue(resultado.next());
-                        assertEquals(9, resultado.getInt(1));
+                        assertEquals(12, resultado.getInt(1));
                 }
                 assertEquals(0, migrador.migrate().migrationsExecuted);
         }
