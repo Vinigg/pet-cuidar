@@ -139,8 +139,8 @@ T6 → T7 → T8
 
 **Done when**:
 
-- [ ] Login e autocadastro abrem o painel correto. Rotas diretas são protegidas. Admin provisiona a equipe, e Tutor usa dados da própria conta.
-- [ ] A verificação Full passa.
+- [x] Login e autocadastro abrem o painel correto. Rotas diretas são protegidas. Admin provisiona a equipe, e Tutor usa dados da própria conta.
+- [x] A verificação Full passa.
 
 **Tests**: integration
 **Gate**: full

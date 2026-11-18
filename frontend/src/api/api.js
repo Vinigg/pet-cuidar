@@ -1,13 +1,26 @@
 import axios from "axios";
 
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8080";
+const API_URL = process.env.REACT_APP_API_URL || "";
 
 export const api = axios.create({
   baseURL: API_URL,
-  headers: { "Content-Type": "application/json" },
+  withCredentials: true,
+  headers: { "Content-Type": "application/json", "X-Pet-Cuidar": "1" },
 });
 
+// ---- Autenticação e equipe ----
+export const solicitarCodigo = (email, finalidade) => api.post("/auth/codigo", { email, finalidade });
+export const verificarCodigo = (email, finalidade, codigo) => api.post("/auth/verificar", { email, finalidade, codigo });
+export const consultarSessao = () => api.get("/auth/sessao");
+export const sair = () => api.post("/auth/sair");
+export const concluirCadastroTutor = (dados) => api.post("/auth/cadastro", dados);
+export const listarEquipe = () => api.get("/equipe");
+export const cadastrarColaborador = (dados) => api.post("/equipe/colaboradores", dados);
+export const vincularVeterinario = (id, email) => api.put(`/equipe/veterinarios/${id}`, { email });
+
 // ---- Tutores / Pets ----
+export const listarMeusPets = () => api.get("/pets/meus");
+export const cadastrarMeuPet = (dados) => api.post("/pets", dados);
 export const cadastrarTutor = (dados) => api.post("/tutores", dados);
 export const listarPets = (tutorId) => api.get("/pets", { params: { tutorId } });
 
@@ -22,6 +35,9 @@ export const listarDisponibilidade = (veterinarioId, data) =>
   api.get(`/veterinarios/${veterinarioId}/disponibilidade`, { params: { data } });
 
 // ---- Consultas ----
+export const listarMinhasConsultas = () => api.get("/consultas/minhas");
+export const atualizarStatusConsulta = (id, status) => api.patch(`/consultas/${id}/status`, { status });
+export const reagendarConsulta = (id, dataHora) => api.patch(`/consultas/${id}/reagendamento`, { dataHora });
 export const criarConsulta = (dados) => api.post("/consultas", dados);
 export const listarConsultasDoDia = (data) => api.get("/consultas", { params: { data } });
 export const obterPredicaoNoShow = (consultaId) => api.get(`/consultas/${consultaId}/predicao-no-show`);

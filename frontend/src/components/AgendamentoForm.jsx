@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Badge } from './common/UIComponents';
-import { criarConsulta, listarDisponibilidade, listarPets, listarVeterinarios } from '../api/api';
+import { criarConsulta, listarDisponibilidade, listarPets, listarVeterinarios, reagendarConsulta } from '../api/api';
 
-export default function AgendamentoForm({ tutorId }) {
+export default function AgendamentoForm({ tutorId, consulta, onSucesso, onCancelar }) {
   const [opcoesPets, setOpcoesPets] = useState([]);
   const [veterinarios, setVeterinarios] = useState([]);
 
-  const [petId, setPetId] = useState('');
-  const [veterinarioId, setVeterinarioId] = useState('');
-  const [dataConsulta, setDataConsulta] = useState(new Date().toISOString().split('T')[0]);
+  const [petId, setPetId] = useState(consulta ? String(consulta.petId) : '');
+  const [veterinarioId, setVeterinarioId] = useState(consulta ? String(consulta.veterinarioId) : '');
+  const [dataConsulta, setDataConsulta] = useState(consulta?.dataHora.split('T')[0] || new Date().toISOString().split('T')[0]);
   const [horariosDisponiveis, setHorariosDisponiveis] = useState([]);
   const [horarioSelecionado, setHorarioSelecionado] = useState('');
 
@@ -84,16 +84,19 @@ export default function AgendamentoForm({ tutorId }) {
       : `${dataConsulta}T${horarioSelecionado}:00`;
 
     try {
-      const response = await criarConsulta({
+      const response = consulta ? await reagendarConsulta(consulta.id, dataHoraIso) : await criarConsulta({
         petId: parseInt(petId, 10),
         veterinarioId: parseInt(veterinarioId, 10),
         dataHora: dataHoraIso
       });
-
-      setMensagemSucesso(`Consulta agendada com sucesso para ${response.data.petNome || 'o pet'}!`);
-  await buscarHorarios();
+      if (onSucesso) {
+        onSucesso(response.data);
+      } else {
+        setMensagemSucesso(`Consulta agendada com sucesso para ${response.data.petNome || 'o pet'}!`);
+        await buscarHorarios();
+      }
     } catch (err) {
-      setErro(err.response?.data?.mensagem || 'Erro ao agendar consulta.');
+      setErro(err.response?.data?.mensagem || 'Não foi possível salvar o agendamento.');
     } finally {
       setLoading(false);
     }
@@ -104,7 +107,7 @@ export default function AgendamentoForm({ tutorId }) {
         <div className="booking-card">
           <header className="form-header">
             <Badge variant="primary">Agendamento Online</Badge>
-            <h1 className="form-title" style={{ marginTop: '8px' }}>Agendar Consulta</h1>
+            <h1 className="form-title" style={{ marginTop: '8px' }}>{consulta ? 'Remarcar consulta' : 'Agendar Consulta'}</h1>
             <p className="form-subtitle">
               Selecione o paciente, o especialista e escolha o melhor horário disponível na clínica.
             </p>
@@ -139,7 +142,7 @@ export default function AgendamentoForm({ tutorId }) {
                       className="select-custom"
                       value={petId}
                       onChange={(e) => setPetId(e.target.value)}
-                      disabled={carregandoOpcoes || Boolean(erroPets) || opcoesPets.length === 0}
+                      disabled={Boolean(consulta) || carregandoOpcoes || Boolean(erroPets) || opcoesPets.length === 0}
                       required
                   >
                     <option value="">Escolha um pet...</option>
@@ -157,7 +160,7 @@ export default function AgendamentoForm({ tutorId }) {
                       className="select-custom"
                       value={veterinarioId}
                       onChange={(e) => setVeterinarioId(e.target.value)}
-                      disabled={carregandoOpcoes || veterinarios.length === 0}
+                      disabled={Boolean(consulta) || carregandoOpcoes || veterinarios.length === 0}
                       required
                   >
                     <option value="">Escolha um(a) veterinário(a)...</option>
@@ -238,8 +241,9 @@ export default function AgendamentoForm({ tutorId }) {
             </div>
 
             <div className="form-actions-footer">
+              {onCancelar && <Button type="button" variant="outlined" onClick={onCancelar}>Voltar</Button>}
               <Button variant="primary" size="lg" type="submit" disabled={loading || !horarioSelecionado}>
-                {loading ? 'Confirmando...' : 'Finalizar Agendamento'}
+                {loading ? 'Confirmando...' : consulta ? 'Confirmar remarcação' : 'Finalizar Agendamento'}
               </Button>
             </div>
           </form>

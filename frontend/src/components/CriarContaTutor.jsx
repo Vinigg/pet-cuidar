@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { concluirCadastroTutor } from '../api/api';
 import { Button, Input } from './common/UIComponents';
 
-export default function CriarContaTutor({ onContaCriada, onVoltarLogin }) {
-    const [tutor, setTutor] = useState({ nome: '', email: '', telefone: '', cpf: '' });
+export default function CriarContaTutor({ email, onContaCriada, onVoltarLogin }) {
+    const [tutor, setTutor] = useState({ nome: '', email, telefone: '', cpf: '' });
     const [pets, setPets] = useState([
         { nome: '', especie: 'Cachorro', idade: '', alergiasCriticas: '' }
     ]);
@@ -32,33 +32,13 @@ export default function CriarContaTutor({ onContaCriada, onVoltarLogin }) {
         setErro(null);
 
         try {
-            const resTutor = await axios.post('http://localhost:8080/tutores', tutor);
-            const tutorCriado = resTutor.data;
-
-            for (const p of pets) {
-                if (p.nome.trim()) {
-                    await axios.post('http://localhost:8080/pets', {
-                        ...p,
-                        idade: p.idade ? parseInt(p.idade, 10) : null,
-                        tutorId: tutorCriado.id
-                    });
-                }
-            }
-
-            onContaCriada({
-                role: 'tutor',
-                id: tutorCriado.id,
-                nome: tutorCriado.nome,
-                email: tutorCriado.email
+            const { data } = await concluirCadastroTutor({
+                ...tutor,
+                pets: pets.map((pet) => ({ ...pet, idade: pet.idade ? Number(pet.idade) : null }))
             });
-        } catch {
-            // Fallback gracioso para testes front-end
-            onContaCriada({
-                role: 'tutor',
-                id: 1,
-                nome: tutor.nome || 'Mariana Costa',
-                email: tutor.email || 'mariana@email.com'
-            });
+            onContaCriada(data);
+        } catch (e) {
+            setErro(e.response?.data?.mensagem || 'Não foi possível concluir o cadastro.');
         } finally {
             setLoading(false);
         }
@@ -99,7 +79,7 @@ export default function CriarContaTutor({ onContaCriada, onVoltarLogin }) {
                                 type="email"
                                 placeholder="mariana@email.com"
                                 value={tutor.email}
-                                onChange={(e) => setTutor({ ...tutor, email: e.target.value })}
+                                readOnly
                                 required
                             />
                         </div>

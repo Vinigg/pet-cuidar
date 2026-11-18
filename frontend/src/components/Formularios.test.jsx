@@ -7,7 +7,7 @@ import AgendamentoForm from "./AgendamentoForm";
 import CadastroVeterinario from "./CadastroVeterinario";
 import Veterinarios from "./Veterinarios";
 import App from "../App";
-import { cadastrarTutor, listarPets, listarVeterinarios, listarDisponibilidade, criarConsulta, cadastrarVeterinario, listarConsultasDoDia,
+import { cadastrarTutor, listarPets, listarVeterinarios, listarDisponibilidade, criarConsulta, cadastrarVeterinario, listarConsultasDoDia, consultarSessao,
   obterVeterinario, listarHorariosVeterinario, atualizarVeterinario, atualizarHorariosVeterinario } from "../api/api";
 
 jest.mock("axios");
@@ -17,7 +17,8 @@ jest.mock("../api/api", () => ({
   cadastrarVeterinario: jest.fn(),
   obterVeterinario: jest.fn(), listarHorariosVeterinario: jest.fn(),
   atualizarVeterinario: jest.fn(), atualizarHorariosVeterinario: jest.fn(),
-  listarConsultasDoDia: jest.fn(),
+  listarConsultasDoDia: jest.fn(), consultarSessao: jest.fn(),
+  api: { interceptors: { response: { use: jest.fn(), eject: jest.fn() } } },
 }));
 
 let container;
@@ -245,16 +246,14 @@ test("veterinario bloqueia envios duplicados enquanto aguarda a API", async () =
   expect(container.querySelector('fieldset').disabled).toBe(false);
 });
 
-const entrarNaClinica = async () => {
-  act(() => root.render(<App />));
-  const equipe = [...container.querySelectorAll('.role-toggle-btn')]
-    .find(botao => botao.textContent.includes("Equipe Clínica"));
-  act(() => Simulate.click(equipe));
-  await enviar();
+const entrarNaClinica = async (perfil) => {
+  window.history.replaceState(null, '', '#/');
+  consultarSessao.mockResolvedValue({ data: { id: 1, perfil, nome: 'Ana' } });
+  await act(async () => root.render(<App />));
 };
 
-test("navegacao abre a tela de veterinarios apos entrar na clinica", async () => {
-  await entrarNaClinica();
+test("navegacao abre a tela de veterinarios para o admin", async () => {
+  await entrarNaClinica('ADMIN');
   const aba = [...container.querySelectorAll('.navbar-tab')].find(botao => botao.textContent === "Veterinários");
   await act(async () => Simulate.click(aba));
   expect(container.querySelector('h1').textContent).toBe("Cadastro de Veterinários");
@@ -262,12 +261,12 @@ test("navegacao abre a tela de veterinarios apos entrar na clinica", async () =>
 });
 
 test.each([
-  ["Cadastro", "Cadastro de Tutor e Pet"],
-  ["Agendar consulta", "Agendar Consulta"],
-  ["Registrar Atendimento", "Atendimento"],
-  ["Histórico do pet", "Histórico do Pet"],
-])("navegacao da clinica preserva a tela %s", async (rotulo, titulo) => {
-  await entrarNaClinica();
+  ["COLABORADOR", "Cadastro", "Cadastro de Tutor e Pet"],
+  ["COLABORADOR", "Agendar consulta", "Agendar Consulta"],
+  ["VETERINARIO", "Registrar atendimento", "Atendimento"],
+  ["VETERINARIO", "Histórico do pet", "Histórico do Pet"],
+])("navegacao do perfil %s preserva a tela %s", async (perfil, rotulo, titulo) => {
+  await entrarNaClinica(perfil);
   const aba = [...container.querySelectorAll('.navbar-tab')].find(botao => botao.textContent === rotulo);
   await act(async () => Simulate.click(aba));
   expect(container.querySelector('h1').textContent).toContain(titulo);

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { cadastrarMeuPet } from '../../api/api';
 import { Button, Input } from '../common/UIComponents';
 
 export default function CadastrarPetIndividual({ onVoltar, onSucesso }) {
@@ -18,17 +18,15 @@ export default function CadastrarPetIndividual({ onVoltar, onSucesso }) {
         setErro(null);
 
         try {
-            await axios.post('http://localhost:8080/pets', {
+            await cadastrarMeuPet({
                 nome,
                 especie,
                 idade: idade ? parseInt(idade, 10) : null,
-                alergiasCriticas,
-                tutorId: 1
+                alergiasCriticas
             });
             if (onSucesso) onSucesso();
-        } catch {
-            // Permite teste de transição no frontend mesmo sem backend ativo
-            if (onSucesso) onSucesso();
+        } catch (e) {
+            setErro(e.response?.data?.mensagem || 'Não foi possível cadastrar o pet.');
         } finally {
             setLoading(false);
         }

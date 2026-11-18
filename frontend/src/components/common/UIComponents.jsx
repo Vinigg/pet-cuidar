@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 
 export function Button({
                            children,
@@ -34,12 +34,15 @@ export function Input({
                           className = '',
                           ...props
                       }) {
+    const inputId = useId();
+    const id = props.id ?? inputId;
     return (
         <div className={`input-group ${className}`}>
-            {label && <label className="input-label">{label}</label>}
+            {label && <label className="input-label" htmlFor={id}>{label}</label>}
             <div className={`input-container ${error ? 'error' : ''}`}>
                 {icon && <span className="input-icon">{icon}</span>}
                 <input
+                    id={id}
                     type={type}
                     value={value}
                     onChange={onChange}
