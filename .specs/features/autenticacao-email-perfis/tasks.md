@@ -64,8 +64,8 @@ T6 → T7 → T8
 
 **Done when**:
 
-- [ ] O provedor recebe o código e a API valida expiração, uso único, concorrência, reenvio e limites.
-- [ ] A verificação Full passa.
+- [x] O provedor recebe o código e a API valida expiração, uso único, concorrência, reenvio e limites.
+- [x] A verificação Full passa.
 
 **Tests**: integration
 **Gate**: full
