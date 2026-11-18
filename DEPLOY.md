@@ -93,6 +93,11 @@ back-end é exposto. O `docker-compose.yml` na raiz do repositório já faz isso
    ```bash
    APP_CORS_ALLOWED_ORIGIN=https://<dominio-do-cloudfront>
    # opcionais (simuladores por padrao):
+   # LLM_PROVIDER=openai
+   # IA_OPENAI_API_KEY=...
+   # IA_OPENAI_MODEL=gpt-4o-mini
+   # IA_OPENAI_BASE_URL=https://api.openai.com/v1
+   # ou, para usar o provedor llm-externo:
    # LLM_PROVIDER=llm-externo
    # LLM_API_KEY=...
    # EMAIL_PROVIDER=resend
@@ -113,6 +118,13 @@ back-end é exposto. O `docker-compose.yml` na raiz do repositório já faz isso
 O back-end encontra o microserviço por `NOSHOW_PREDICTOR_BASE_URL=http://predicao:8000`,
 que o compose já define. O banco fica no volume `petcuidar-data` (`/data/petcuidar.db`
 dentro do container): é esse arquivo que entra na rotina de backup.
+
+O backend inicia independentemente da saúde da predição. Se o modelo não
+carregar ou o serviço estiver fora, as consultas continuam disponíveis e o
+risco aparece como **Indisponível**. O health check da predição continua ativo
+para diagnóstico. Para subir somente o backend, use `docker compose up -d backend`.
+Após recuperar a predição, aguarde a janela do circuit breaker antes de
+verificar os scores novamente (30 segundos por padrão).
 
 ### Alternativas
 

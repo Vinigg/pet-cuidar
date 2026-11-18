@@ -16,9 +16,6 @@ services:
   backend:
     build: ./backend
     restart: unless-stopped
-    depends_on:
-      predicao:
-        condition: service_healthy
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     environment:
@@ -26,6 +23,9 @@ services:
       APP_CORS_ALLOWED_ORIGIN: ${APP_CORS_ALLOWED_ORIGIN:-http://localhost:3000}
       # Integracoes externas: simuladores por padrao. Em producao, defina no .env.
       LLM_PROVIDER: ${LLM_PROVIDER:-simulador}
+      IA_OPENAI_API_KEY: ${IA_OPENAI_API_KEY:-}
+      IA_OPENAI_MODEL: ${IA_OPENAI_MODEL:-gpt-4o-mini}
+      IA_OPENAI_BASE_URL: ${IA_OPENAI_BASE_URL:-https://api.openai.com/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}
       EMAIL_PROVIDER: ${EMAIL_PROVIDER:-local}
       RESEND_API_KEY: ${RESEND_API_KEY:-}

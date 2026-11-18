@@ -37,6 +37,23 @@ por padrão).
 | 10 | `docker compose start predicao`, aguardar 30 s e atualizar | Scores voltam (o circuit breaker fecha após o `reset-ms`) | |
 | 11 | Enviar lembrete de uma consulta | Modal mostra o texto (simulador ou provedor real) | |
 
+## Inicialização com a predição indisponível
+
+Além de interromper a predição com o backend já rodando, verifique que ela
+não bloqueia a inicialização do backend:
+
+```bash
+docker compose stop backend predicao
+docker compose up -d backend
+docker compose ps --all
+```
+
+O backend deve iniciar e a predição deve permanecer parada. Repita os passos
+8 e 9 do checklist: o risco fica **Indisponível**, mas o agendamento funciona.
+Depois, execute `docker compose up -d predicao`, aguarde a predição ficar
+saudável e a janela do circuit breaker (30 segundos por padrão), e atualize
+a agenda para conferir a recuperação dos scores.
+
 ## Em produção
 
 Repita os passos 2 a 11 pela URL do CloudFront. Pontos extras:
