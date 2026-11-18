@@ -23,6 +23,8 @@ services:
       APP_CORS_ALLOWED_ORIGIN: ${APP_CORS_ALLOWED_ORIGIN:-http://localhost:3000}
       AUTH_ADMIN_EMAIL: ${AUTH_ADMIN_EMAIL:-}
       AUTH_SECURE_COOKIE: ${AUTH_SECURE_COOKIE:-true}
+      SERVER_FORWARD_HEADERS_STRATEGY: ${SERVER_FORWARD_HEADERS_STRATEGY:-none}
+      AUTH_TRUSTED_PROXIES: "${AUTH_TRUSTED_PROXIES:-(?!)}"
       # Integracoes externas: simuladores por padrao. Em producao, defina no .env.
       LLM_PROVIDER: ${LLM_PROVIDER:-simulador}
       IA_OPENAI_API_KEY: ${IA_OPENAI_API_KEY:-}

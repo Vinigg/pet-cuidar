@@ -83,9 +83,12 @@ Para publicar o front e a API na mesma origem, crie um comportamento `/api/*` no
 function handler(event) {
     var request = event.request;
     request.uri = request.uri.slice(4);
+    request.headers['x-pet-cuidar-client-ip'] = { value: event.viewer.ip };
     return request;
 }
 ```
+
+Configure `SERVER_FORWARD_HEADERS_STRATEGY=native` e defina `AUTH_TRUSTED_PROXIES` com a expressão regular dos endereços dos proxies imediatos autorizados a conectar ao Tomcat. Restrinja a origem à cadeia de proxies que grava `X-Pet-Cuidar-Client-IP`. Para Nginx diretamente exposto ao navegador, sobrescreva esse cabeçalho com `proxy_set_header X-Pet-Cuidar-Client-IP $remote_addr;`. O acesso direto em desenvolvimento mantém a configuração padrão. [IP do visitante em CloudFront Functions](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-event-structure.html). [Configuração de proxy do Spring Boot](https://docs.spring.io/spring-boot/docs/3.2.7/reference/html/howto.html).
 
 Confirme que `/api/auth/sessao` responde `401` sem cookie e que a solicitação de código e a validação chegam ao back-end. Mantenha cookies, corpo da requisição e códigos fora dos logs do proxy.
 

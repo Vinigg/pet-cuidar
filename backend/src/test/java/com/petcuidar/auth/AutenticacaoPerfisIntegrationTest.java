@@ -76,6 +76,16 @@ class AutenticacaoPerfisIntegrationTest {
         mvc.perform(get("/pets/1/historico").cookie(colaborador)).andExpect(status().isForbidden());
         mvc.perform(post("/tutores").cookie(colaborador).contentType("application/json").content("{}"))
                 .andExpect(status().isForbidden());
+        mvc.perform(post("/equipe/colaboradores").cookie(colaborador).header("X-Pet-Cuidar", "1")
+                        .contentType("application/json").content("""
+                                {"nome":"Conta indevida","email":"indevido@example.invalid"}
+                                """))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/equipe/colaboradores").cookie(admin).header("X-Pet-Cuidar", "1")
+                        .contentType("application/json").content("""
+                                {"nome":"Conta permitida","email":"permitido@example.invalid"}
+                                """))
+                .andExpect(status().isCreated());
         System.out.println("PASS C12 API retorna 403 para perfil incorreto");
     }
 
@@ -90,12 +100,19 @@ class AutenticacaoPerfisIntegrationTest {
         mvc.perform(get("/pets").param("tutorId", String.valueOf(outroTutor)).cookie(cookie))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].id").value(pet));
+        mvc.perform(get("/pets/meus").cookie(cookie))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(pet));
         mvc.perform(get("/consultas/minhas").cookie(cookie))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].id").value(consulta));
         mvc.perform(patch("/consultas/{id}/status", outraConsulta).cookie(cookie)
                         .header("X-Pet-Cuidar", "1").contentType("application/json")
                         .content("{\"status\":\"CANCELADA\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(patch("/consultas/{id}/reagendamento", outraConsulta).cookie(cookie)
+                        .header("X-Pet-Cuidar", "1").contentType("application/json")
+                        .content("{\"dataHora\":\"2030-01-01T12:00:00\"}"))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/consultas").cookie(cookie).header("X-Pet-Cuidar", "1")
                         .contentType("application/json").content("""
@@ -106,6 +123,10 @@ class AutenticacaoPerfisIntegrationTest {
                 .andExpect(status().isCreated());
         org.junit.jupiter.api.Assertions.assertEquals(tutor, banco.queryForObject(
                 "SELECT tutor_id FROM pets WHERE nome = 'Novo pet'", Long.class));
+        org.junit.jupiter.api.Assertions.assertEquals("AGENDADA", banco.queryForObject(
+                "SELECT status FROM consultas WHERE id = ?", String.class, outraConsulta));
+        org.junit.jupiter.api.Assertions.assertEquals("2024-01-15 10:00:00.000", banco.queryForObject(
+                "SELECT data_hora FROM consultas WHERE id = ?", String.class, outraConsulta));
         System.out.println("PASS C13 Tutor só manipula pets e consultas da própria conta");
     }
 
@@ -124,14 +145,37 @@ class AutenticacaoPerfisIntegrationTest {
         mvc.perform(post("/atendimentos").cookie(cookie).header("X-Pet-Cuidar", "1")
                         .contentType("application/json").content(atendimento(pet, consulta, outro)))
                 .andExpect(status().isForbidden());
-        mvc.perform(post("/atendimentos").cookie(cookie).header("X-Pet-Cuidar", "1")
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        String atendimentoProprio = mvc.perform(post("/atendimentos").cookie(cookie).header("X-Pet-Cuidar", "1")
                         .contentType("application/json").content(atendimento(pet, consulta, veterinario)))
-                .andExpect(status().isCreated()).andExpect(jsonPath("$.veterinarioId").value(veterinario));
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.veterinarioId").value(veterinario))
+                .andReturn().getResponse().getContentAsString();
+        long idProprio = mapper.readTree(atendimentoProprio).get("id").longValue();
+        mvc.perform(patch("/atendimentos").cookie(cookie).header("X-Pet-Cuidar", "1")
+                        .contentType("application/json").content("""
+                                {"atendimentoId":%d,"veterinarioId":%d,"descricaoClinica":"Complemento da consulta."}
+                                """.formatted(idProprio, veterinario)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.descricaoClinica").value("Complemento da consulta."));
+        Cookie sessaoDoOutro = contaDeTeste("VETERINARIO", null, outro);
+        long consultaExternaDoMesmoPet = novaConsulta(pet, outro);
+        String atendimentoExterno = mvc.perform(post("/atendimentos").cookie(sessaoDoOutro)
+                        .header("X-Pet-Cuidar", "1").contentType("application/json")
+                        .content(atendimento(pet, consultaExternaDoMesmoPet, outro)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        long idExterno = mapper.readTree(atendimentoExterno).get("id").longValue();
+        mvc.perform(patch("/atendimentos").cookie(cookie).header("X-Pet-Cuidar", "1")
+                        .contentType("application/json").content("""
+                                {"atendimentoId":%d,"veterinarioId":%d,"descricaoClinica":"Tentativa indevida."}
+                                """.formatted(idExterno, veterinario)))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/atendimentos/{id}", idExterno).cookie(sessaoDoOutro)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.descricaoClinica").value("Observações clínicas."));
         System.out.println("PASS C14 Veterinário só manipula atendimentos vinculados");
     }
 
     private Cookie contaDeTeste(String perfil, Long tutor, Long veterinario) {
-        String email = UUID.randomUUID() + "@example.com";
+        String email = tutor == null ? UUID.randomUUID() + "@example.com"
+                : banco.queryForObject("SELECT email_normalizado FROM tutores WHERE id = ?", String.class, tutor);
         long id = banco.queryForObject("""
                 INSERT INTO contas (email, nome, perfil, tutor_id, veterinario_id)
                 VALUES (?, 'Conta de teste', ?, ?, ?) RETURNING id
@@ -140,8 +184,10 @@ class AutenticacaoPerfisIntegrationTest {
     }
 
     private long novoTutor() {
-        return banco.queryForObject("INSERT INTO tutores (nome, email) VALUES ('Tutor', ?) RETURNING id",
-                Long.class, UUID.randomUUID() + "@example.com");
+        String email = UUID.randomUUID() + "@example.com";
+        return banco.queryForObject("""
+                INSERT INTO tutores (nome, email, email_normalizado) VALUES ('Tutor', ?, ?) RETURNING id
+                """, Long.class, email, email);
     }
 
     private long novoPet(long tutor, String nome) {
@@ -238,9 +284,11 @@ class AutenticacaoPerfisIntegrationTest {
 
     @Test
     void emailAmbiguoNaoPodeEntrarNemSerRecadastrado() throws Exception {
-        String email = UUID.randomUUID() + "@example.com";
-        banco.update("INSERT INTO tutores (nome, email) VALUES ('Primeiro', ?), ('Segundo', ?)",
-                email, email.toUpperCase(java.util.Locale.ROOT));
+        String email = UUID.randomUUID() + "@éxemplo.invalid";
+        banco.update("""
+                INSERT INTO tutores (nome, email, email_normalizado) VALUES
+                    ('Primeiro', ?, ?), ('Segundo', ?, ?)
+                """, email, email, email.toUpperCase(java.util.Locale.ROOT), email);
         for (String finalidade : new String[]{"LOGIN", "CADASTRO"}) {
             mvc.perform(post("/auth/codigo").header("X-Pet-Cuidar", "1").contentType("application/json")
                             .content(solicitacao(email, finalidade))).andExpect(status().isAccepted());

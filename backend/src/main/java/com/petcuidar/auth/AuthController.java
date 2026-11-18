@@ -39,7 +39,7 @@ public class AuthController {
     public record Verificacao(@NotBlank @Email @Size(max = 254) String email,
                               @NotNull DesafioEmailService.Finalidade finalidade,
                               @NotNull @Pattern(regexp = "[0-9]{8}") String codigo) {}
-    private record Limite(long minuto, int total) {}
+    private record Limite(long inicio, int total) {}
 
     private final DesafioEmailService desafios;
     private final SessaoService sessoes;
@@ -122,14 +122,14 @@ public class AuthController {
     }
 
     private synchronized boolean limitar(String endereco) {
-        long minuto = Instant.now().getEpochSecond() / 60;
-        limites.values().removeIf(limite -> limite.minuto() != minuto);
+        long agora = Instant.now().getEpochSecond();
+        limites.values().removeIf(limite -> agora - limite.inicio() >= 60);
         Limite limite = limites.get(endereco);
         if (limite == null && limites.size() >= 1024
                 || limite != null && limite.total() >= REQUISICOES_POR_MINUTO) {
             return true;
         }
-        limites.put(endereco, new Limite(minuto, limite == null ? 1 : limite.total() + 1));
+        limites.put(endereco, limite == null ? new Limite(agora, 1) : new Limite(limite.inicio(), limite.total() + 1));
         return false;
     }
 }

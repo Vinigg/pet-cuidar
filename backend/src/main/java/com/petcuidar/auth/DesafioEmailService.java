@@ -51,13 +51,11 @@ public class DesafioEmailService {
     }
 
     private void prepararEnvio(String email, Finalidade finalidade) {
-        boolean existe = Boolean.TRUE.equals(banco.queryForObject("""
-                SELECT EXISTS (SELECT 1 FROM contas c WHERE c.email = ? AND
-                    (c.veterinario_id IS NULL OR EXISTS (
-                        SELECT 1 FROM veterinarios v WHERE v.id = c.veterinario_id AND v.ativo = 1
-                    )))
-                """, Boolean.class, email));
-        if (finalidade == Finalidade.LOGIN ? !existe : existe || emailDeTutor(email)) {
+        boolean elegivel = finalidade == Finalidade.LOGIN
+                ? existe("SELECT 1 FROM contas c WHERE c.email = ? AND " + SessaoService.CONTA_ATIVA, email)
+                : !existe("SELECT 1 FROM contas WHERE email = ?", email)
+                    && !existe("SELECT 1 FROM tutores WHERE email_normalizado = ?", email);
+        if (!elegivel) {
             return;
         }
 
@@ -89,9 +87,8 @@ public class DesafioEmailService {
         }
     }
 
-    private boolean emailDeTutor(String email) {
-        return Boolean.TRUE.equals(banco.queryForObject(
-                "SELECT EXISTS (SELECT 1 FROM tutores WHERE lower(trim(email)) = ?)", Boolean.class, email));
+    private boolean existe(String sql, String email) {
+        return Boolean.TRUE.equals(banco.queryForObject("SELECT EXISTS (" + sql + ")", Boolean.class, email));
     }
 
     @Transactional

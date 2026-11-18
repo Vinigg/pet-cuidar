@@ -1,5 +1,6 @@
 package com.petcuidar.auth;
 
+import com.petcuidar.model.EmailCanonico;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,7 +13,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
-import java.util.Locale;
 import java.util.Optional;
 
 import static com.petcuidar.auth.DesafioEmailService.Finalidade;
@@ -24,10 +24,15 @@ public class SessaoService {
     static final Duration VALIDADE_SESSAO = Duration.ofHours(8);
     static final Duration VALIDADE_CADASTRO = Duration.ofMinutes(10);
 
-    private static final String CONTA_ATIVA = """
+    static final String CONTA_ATIVA = """
             (c.veterinario_id IS NULL OR EXISTS (
                 SELECT 1 FROM veterinarios v WHERE v.id = c.veterinario_id AND v.ativo = 1
             ))
+            AND (c.tutor_id IS NULL OR EXISTS (
+                SELECT 1 FROM tutores t WHERE t.id = c.tutor_id AND t.email_normalizado = c.email
+            ))
+            AND (SELECT count(*) FROM tutores t WHERE t.email_normalizado = c.email)
+                = CASE WHEN c.perfil = 'TUTOR' THEN 1 ELSE 0 END
             """;
 
     public record Credencial(String token, Duration validade, Conta conta) {}
@@ -42,7 +47,7 @@ public class SessaoService {
     }
 
     public static String normalizarEmail(String email) {
-        return email.strip().toLowerCase(Locale.ROOT);
+        return EmailCanonico.normalizar(email);
     }
 
     @Transactional

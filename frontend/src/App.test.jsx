@@ -11,12 +11,24 @@ jest.mock('./api/api', () => ({
     concluirCadastroTutor: jest.fn(),
     sair: jest.fn(),
     listarMeusPets: jest.fn(async () => ({ data: [] })),
-    listarMinhasConsultas: jest.fn(async () => ({ data: [] }))
+    listarMinhasConsultas: jest.fn(async () => ({ data: [] })),
+    listarPets: jest.fn(async () => ({ data: [] })),
+    listarVeterinarios: jest.fn(async () => ({ data: [] })),
+    listarEquipe: jest.fn(async () => ({ data: [] }))
 }));
 jest.mock('./components/PainelRecepcionista', () => () => <h1>Agenda da recepção</h1>);
-jest.mock('./components/HistoricoPet', () => () => <h1>Histórico veterinário</h1>);
+const mockMontarHistorico = jest.fn();
+const mockMontarVeterinarios = jest.fn();
+
+jest.mock('./components/HistoricoPet', () => () => {
+    mockMontarHistorico();
+    return <h1>Histórico veterinário</h1>;
+});
 jest.mock('./components/FormularioAtendimento', () => () => <h1>Atendimento veterinário</h1>);
-jest.mock('./components/Veterinarios', () => () => <h1>Gestão de veterinários</h1>);
+jest.mock('./components/Veterinarios', () => () => {
+    mockMontarVeterinarios();
+    return <h1>Gestão de veterinários</h1>;
+});
 
 const obterConta = (perfil) => ({ id: 1, email: 'ana@example.com', nome: 'Ana', perfil });
 let container;
@@ -85,19 +97,53 @@ test.each([
     await abrir(perfil);
     expect(menu()).toEqual(esperado);
     expect(container.querySelector('main h1').textContent).toBe(titulo);
+
+    if (perfil === 'TUTOR') {
+        await clicar('Meus pets');
+        await clicar('Cadastrar pet');
+        expect(window.location.hash).toBe('#/tutor/cadastrar-pet');
+        expect(container.textContent).toContain('Salvar pet');
+        await clicar('Início');
+        await clicar('Agendar consulta');
+        expect(window.location.hash).toBe('#/tutor/agendar-consulta');
+        expect(container.querySelector('main h1').textContent).toBe('Agendar Consulta');
+    } else if (perfil === 'VETERINARIO') {
+        await clicar('Registrar atendimento');
+        expect(window.location.hash).toBe('#/veterinario/atendimentos');
+        expect(container.querySelector('main h1').textContent).toBe('Atendimento veterinário');
+    } else if (perfil === 'COLABORADOR') {
+        await clicar('Cadastro');
+        expect(container.querySelector('main h1').textContent).toBe('Cadastro de Tutor e Pet');
+        await clicar('Agendar consulta');
+        expect(container.querySelector('main h1').textContent).toBe('Agendar Consulta');
+    } else {
+        await clicar('Contas da equipe');
+        expect(window.location.hash).toBe('#/admin/colaboradores');
+        expect(container.querySelector('main h1').textContent).toBe('Contas da equipe');
+        expect(container.textContent).toContain('Cadastrar colaborador');
+        expect(container.textContent).toContain('Vincular acesso de veterinário');
+    }
 });
 
 test('C9 visitante é enviado à entrada', async () => {
-    await abrir(null, '/admin/veterinarios');
+    let rejeitarSessao;
+    consultarSessao.mockImplementation(() => new Promise((_, reject) => { rejeitarSessao = reject; }));
+    window.history.replaceState(null, '', '#/admin/veterinarios');
+    await act(async () => root.render(<App />));
+    expect(container.querySelector('[role="status"]').textContent).toBe('Verificando sessão…');
+    expect(mockMontarVeterinarios).not.toHaveBeenCalled();
+    await act(async () => rejeitarSessao({ response: { status: 401 } }));
     expect(window.location.hash).toBe('#/login');
     expect(container.querySelector('main h2').textContent).toBe('Entrar');
     expect(container.textContent).not.toContain('Gestão de veterinários');
+    expect(mockMontarVeterinarios).not.toHaveBeenCalled();
 });
 
 test('C10 URL de outro perfil mostra acesso negado', async () => {
     await abrir('COLABORADOR', '/veterinario/historico');
     expect(container.querySelector('main h1').textContent).toBe('Acesso negado');
     expect(container.textContent).not.toContain('Histórico veterinário');
+    expect(mockMontarHistorico).not.toHaveBeenCalled();
     await clicar('Voltar ao meu painel');
     expect(window.location.hash).toBe('#/colaborador/painel');
     expect(container.querySelector('main h1').textContent).toBe('Agenda da recepção');

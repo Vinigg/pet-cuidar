@@ -1,10 +1,10 @@
 # Autenticação por e-mail e perfis — Tasks
 
 **Design**: `.specs/features/autenticacao-email-perfis/design.md`
-**Status**: In Progress
+**Status**: Done
 **Approved**: 2026-11-18 - user: "Aprovo o plano e a implementação"
 **Build**: `cd backend && mvn --batch-mode verify; cd frontend && npm run build`
-**Run api**: `cd backend && mvn --batch-mode -Dtest=AutenticacaoPerfisIntegrationTest,DesafioEmailIntegrationTest test`
+**Run api**: `cd backend && mvn --batch-mode -Dtest=AutenticacaoPerfisIntegrationTest,DesafioEmailIntegrationTest,MigracaoContasTest,LimiteProxyIntegrationTest test`
 **Run front**: `cd frontend && npm test -- --watchAll=false --runInBand --verbose --runTestsByPath src/App.test.jsx`
 
 ## Test Coverage Matrix
@@ -238,15 +238,17 @@ Proof: run api | PASS C24 e-mail desconhecido recebe resposta genérica
 
 **C25** - limites de envio e verificação são aplicados (Casos de borda, AC 4)
 Proof: run api | PASS C25 limites de envio e verificação são aplicados
+Proof: run api | PASS C25 clientes do mesmo proxy têm cotas distintas
 
 **C26** - falha de envio descarta o desafio (Casos de borda, AC 5)
 Proof: run api | PASS C26 falha de envio descarta o desafio
 
 **C27** - e-mail ambíguo não permite autenticação (Casos de borda, AC 6)
 Proof: run api | PASS C27 e-mail ambíguo não permite autenticação
+Proof: run api | PASS C27 migração preserva e-mails legados inequívocos
 
 ## Handoff
 
 **Settled mid-build:** none
-**Dispatched:** none
+**Dispatched:** Verifier at `5a3be15`, returned
 **Walked:** Chrome headless, API Spring Boot, banco SQLite descartável e servidor HTTP local simulando o Resend. Admin entrou por código, cadastrou colaborador, vinculou veterinário, recarregou o painel e saiu. Colaborador abriu o painel do dia e recebeu acesso negado em rota clínica direta e na API clínica. Veterinário abriu histórico e atendimento. Tutor verificou o e-mail, cadastrou a conta e o pet pela interface, acessou suas consultas e teve a sessão revogada ao sair.
