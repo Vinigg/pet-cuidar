@@ -14,7 +14,9 @@ que foi descrito na Secao 4 do documento de arquitetura.
      |
      v  (chamadas REST via HTTPS)
 [ Elastic Beanstalk / EC2 ]  <-- back-end Spring Boot (JAR)
-     |
+     |                               |
+     |                               v  (HTTP, risco de no-show)
+     |                       [ Microservico FastAPI ]  <-- predicao (Python)
      v
 [ arquivo petcuidar.db no volume da instancia ]
 ```
@@ -60,6 +62,59 @@ do free tier), instalar o Java 17 e rodar o JAR diretamente com
 `java -jar pet-cuidar-backend.jar`, atras de um Nginx como proxy reverso com
 HTTPS (Let's Encrypt) ou de um Application Load Balancer com certificado do
 ACM.
+
+## Microserviço de predição de no-show (Python / FastAPI)
+
+O cálculo do risco de falta roda num serviço Python separado, em
+`microservico-predicao/`. O back-end Spring Boot o consome por HTTP e, em caso
+de falha, timeout ou resposta inválida, usa o fallback "score indisponível", ou seja, o agendamento continua funcionando mesmo se este serviço estiver fora.
+
+O modelo treinado (`model/modelo_noshow.joblib`) já vai versionado no
+repositório, então **não é necessário treinar no deploy**.
+
+### Opção A - Container (recomendada)
+
+O serviço já tem um `Dockerfile` pronto.
+
+1. Build e publicação da imagem (ex.: no **Amazon ECR**):
+   ```bash
+   cd microservico-predicao
+   docker build -t pet-cuidar-predicao .
+   # autenticar no ECR, criar o repositorio e dar push da imagem
+   ```
+2. Subir a imagem num serviço de container gerenciado (**AWS App Runner** ou
+   **ECS/Fargate**), expondo a porta **8000**.
+3. Anotar a URL pública gerada (ex.: `https://<id>.awsapprunner.com`).
+
+### Opção B - EC2 simples (mesma instância do back-end ou outra)
+
+1. Instalar Python 3.11+ na instância.
+2. Copiar a pasta `microservico-predicao/` e instalar as dependências:
+   ```bash
+   cd microservico-predicao
+   pip install -r requirements.txt
+   ```
+3. Rodar o serviço (de preferência atrás de Nginx, como `systemd` service):
+   ```bash
+   uvicorn app.main:app --host 0.0.0.0 --port 8000
+   ```
+
+### Ligando o back-end ao microserviço
+
+Depois de publicar, aponte o back-end para a URL do serviço, definindo a
+variável de ambiente no Elastic Beanstalk/EC2 do back-end:
+
+- `NOSHOW_PREDICTOR_BASE_URL=https://<url-do-microservico>`
+
+Se a variável não for definida, o back-end usa o default `http://localhost:8000`
+(útil só em desenvolvimento, com os dois serviços na mesma máquina).
+
+### Verificação rápida
+
+- `GET https://<url-do-microservico>/health` deve responder
+  `{"status":"ok","modelo_carregado":true}`.
+- Se `modelo_carregado` vier `false`, o arquivo `model/modelo_noshow.joblib`
+  não subiu junto — inclua-o na imagem/instância.
 
 ## Banco de dados (SQLite) — limitacao importante
 
