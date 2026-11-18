@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @AutoConfigureMockMvc
-@SpringBootTest
+@SpringBootTest(properties = "app.auth.admin-email=admin-inicial@example.invalid")
 class AutenticacaoPerfisIntegrationTest {
     @DynamicPropertySource
     static void propriedades(DynamicPropertyRegistry propriedades) {
@@ -165,6 +165,36 @@ class AutenticacaoPerfisIntegrationTest {
         return """
                 {"petId":%d,"consultaId":%d,"veterinarioId":%d,"descricaoClinica":"Observações clínicas."}
                 """.formatted(pet, consulta, veterinario);
+    }
+
+    @Test
+    void adminConfiguradoProvisionaEquipeComPerfisFixos() throws Exception {
+        Cookie admin = autenticar("admin-inicial@example.invalid", "ADMIN");
+        System.out.println("PASS C15 admin inicial entra pelo e-mail configurado");
+        long id = novoVeterinario();
+        String veterinario = UUID.randomUUID() + "@example.com";
+        mvc.perform(put("/equipe/veterinarios/{id}", id).cookie(admin).header("X-Pet-Cuidar", "1")
+                        .contentType("application/json").content("{\"email\":\"" + veterinario + "\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.veterinarioId").value(id));
+        Cookie sessaoVet = autenticar(veterinario, "VETERINARIO");
+        mvc.perform(get("/auth/sessao").cookie(sessaoVet)).andExpect(jsonPath("$.veterinarioId").value(id));
+        System.out.println("PASS C16 admin provisiona veterinário vinculado");
+
+        String colaborador = UUID.randomUUID() + "@example.com";
+        String cadastro = "{\"nome\":\"Ana\",\"perfil\":\"ADMIN\",\"email\":\"" + colaborador + "\"}";
+        mvc.perform(post("/equipe/colaboradores").cookie(admin).header("X-Pet-Cuidar", "1")
+                        .contentType("application/json").content(cadastro)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.perfil").value("COLABORADOR"));
+        Cookie sessaoColaborador = autenticar(colaborador, "COLABORADOR");
+        mvc.perform(get("/equipe").cookie(sessaoColaborador)).andExpect(status().isForbidden());
+        System.out.println("PASS C17 admin provisiona colaborador");
+
+        mvc.perform(put("/equipe/veterinarios/{id}", id).cookie(admin).header("X-Pet-Cuidar", "1")
+                        .contentType("application/json").content("{\"email\":\"" + colaborador + "\"}"))
+                .andExpect(status().isConflict());
+        mvc.perform(get("/auth/sessao").cookie(sessaoVet)).andExpect(jsonPath("$.email").value(veterinario));
+        mvc.perform(get("/auth/sessao").cookie(sessaoColaborador)).andExpect(jsonPath("$.perfil").value("COLABORADOR"));
+        System.out.println("PASS C18 e-mail conflitante retorna 409");
     }
 
     private String novoColaborador() {

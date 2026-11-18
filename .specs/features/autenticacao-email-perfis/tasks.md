@@ -109,8 +109,8 @@ T6 → T7 → T8
 
 **Done when**:
 
-- [ ] O admin inicial entra por configuração e provisiona veterinários e colaboradores sem colisão de contas.
-- [ ] A verificação Full passa.
+- [x] O admin inicial entra por configuração e provisiona veterinários e colaboradores sem colisão de contas.
+- [x] A verificação Full passa.
 
 **Tests**: integration
 **Gate**: full
