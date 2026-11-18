@@ -87,12 +87,18 @@ nem commitadas no Git. Armazene-as no **AWS Systems Manager Parameter Store**
 (ou **Secrets Manager**) e injete-as como variaveis de ambiente no Elastic
 Beanstalk/EC2.
 
-- **OpenAI:** `IA_PROVIDER=openai`, com `LLM_API_KEY`, `LLM_MODEL` e
-   `LLM_BASE_URL`.
-- **Anthropic:** `LLM_PROVIDER=anthropic`, com `LLM_API_KEY` e, se necessario,
-   `LLM_MODEL` e `LLM_BASE_URL`. A ativacao deve aguardar o ajuste da selecao de
-   clientes IA: na configuracao atual, o simulador e o cliente Anthropic podem
-   ser registrados simultaneamente.
+- **Provedor de IA:** `LLM_PROVIDER` = `simulador` (padrao), `openai` ou
+   `llm-externo`. Exatamente um cliente e registrado; valor invalido impede a
+   inicializacao. Cada provedor tem as proprias variaveis, sem compartilhamento:
+   - `openai`: `IA_OPENAI_API_KEY` e, se necessario, `IA_OPENAI_MODEL` e
+     `IA_OPENAI_BASE_URL`.
+   - `llm-externo`: `LLM_API_KEY` e, se necessario, `LLM_MODEL`,
+     `LLM_BASE_URL`, `LLM_EFFORT` e `LLM_MAX_TOKENS`.
+   - Exemplo: `LLM_PROVIDER=llm-externo` e `LLM_API_KEY=<sua-chave>`.
+   - **Migracao:** quem usava `IA_PROVIDER=openai` com `LLM_API_KEY`,
+     `LLM_MODEL` e `LLM_BASE_URL` deve passar a chave, o modelo e o endpoint
+     para `IA_OPENAI_API_KEY`, `IA_OPENAI_MODEL` e `IA_OPENAI_BASE_URL`.
+     `IA_PROVIDER` continua aceito quando `LLM_PROVIDER` nao esta definido.
 - **Resend:** `EMAIL_PROVIDER=resend`, `RESEND_API_KEY` e `EMAIL_FROM`.
 - **Preditor de no-show:** `NOSHOW_PREDICTOR_BASE_URL`, apontando para o
    servico FastAPI publicado.

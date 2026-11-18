@@ -18,6 +18,23 @@ são recusadas com HTTP 409; consulta inexistente retorna HTTP 404. O parâmetro
 ser definido pela clínica. Uma transição manual não cria histórico clínico
 nem envia ou cancela e-mails. Predição ou IA nunca altera o estado.
 
+## Registro de atendimento (`POST /atendimentos`)
+
+Registrar o atendimento é o que leva a consulta a REALIZADA. O
+`AtendimentoService` aplica a transição por `ConsultaStateMachine.transicionar`
+na mesma transação que grava o histórico clínico: se o histórico não for
+gravado, o status também não muda.
+
+| Status da consulta | Resultado | HTTP |
+| --- | --- | --- |
+| AGENDADA ou CONFIRMADA | Histórico gravado e consulta passa a REALIZADA | 201 |
+| REALIZADA | Histórico adicional gravado (ex.: complemento), sem nova transição | 201 |
+| CANCELADA ou NAO_COMPARECEU | Recusado; nada é gravado | 409 |
+| Consulta de outro pet que não o `petId` informado | Recusado; nada é gravado | 400 |
+| Pet, consulta ou veterinário inexistente | Recusado | 404 |
+
+Atualizar a descrição (`PATCH /atendimentos`) não altera o status.
+
 ## Atualização de status pela recepção (PC-027)
 
 `PATCH /consultas/{id}/status`

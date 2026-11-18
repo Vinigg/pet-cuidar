@@ -47,10 +47,10 @@ para que testes e desenvolvimento nunca dependam de credenciais ou rede.
 
 | Variável | Padrão | Finalidade |
 | --- | --- | --- |
-| `IA_PROVIDER` | `simulator` | Use `openai` somente para chamada externa explícita |
-| `LLM_BASE_URL` | `https://api.openai.com/v1` | API compatível com OpenAI |
-| `LLM_API_KEY` | vazio | Credencial protegida do LLM |
-| `LLM_MODEL` | `gpt-4o-mini` | Modelo de texto |
+| `LLM_PROVIDER` | `simulador` | `simulador`, `openai` ou `llm-externo` (ver [resiliencia-ia.md](resiliencia-ia.md)) |
+| `IA_OPENAI_BASE_URL` | `https://api.openai.com/v1` | Endpoint do provedor `openai` |
+| `IA_OPENAI_API_KEY` | vazio | Credencial protegida do provedor `openai` |
+| `IA_OPENAI_MODEL` | `gpt-4o-mini` | Modelo do provedor `openai` |
 | `NOSHOW_PREDICTOR_BASE_URL` | `http://localhost:8000` | Microserviço FastAPI |
 | `NOSHOW_PREDICTOR_TIMEOUT_MS` | `5000` | Timeout da predição |
 | `EMAIL_PROVIDER` | `local` | Use `resend` para envio externo |

@@ -1,20 +1,23 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { Simulate } from "react-dom/test-utils";
+import axios from "axios";
 import CadastroTutorPet from "./CadastroTutorPet";
 import AgendamentoForm from "./AgendamentoForm";
 import CadastroVeterinario from "./CadastroVeterinario";
 import Veterinarios from "./Veterinarios";
 import App from "../App";
-import { cadastrarTutor, listarPets, listarVeterinarios, listarDisponibilidade, criarConsulta, cadastrarVeterinario,
+import { cadastrarTutor, listarPets, listarVeterinarios, listarDisponibilidade, criarConsulta, cadastrarVeterinario, listarConsultasDoDia,
   obterVeterinario, listarHorariosVeterinario, atualizarVeterinario, atualizarHorariosVeterinario } from "../api/api";
 
+jest.mock("axios");
 jest.mock("../api/api", () => ({
   cadastrarTutor: jest.fn(), listarPets: jest.fn(), listarVeterinarios: jest.fn(),
   listarDisponibilidade: jest.fn(), criarConsulta: jest.fn(),
   cadastrarVeterinario: jest.fn(),
   obterVeterinario: jest.fn(), listarHorariosVeterinario: jest.fn(),
   atualizarVeterinario: jest.fn(), atualizarHorariosVeterinario: jest.fn(),
+  listarConsultasDoDia: jest.fn(),
 }));
 
 let container;
@@ -22,6 +25,8 @@ let root;
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   jest.resetAllMocks();
+  axios.get.mockResolvedValue({ data: [] });
+  listarConsultasDoDia.mockResolvedValue({ data: [] });
   listarPets.mockResolvedValue({ data: [{ id: 12, nome: "Luna", especie: "Gato", tutorNome: "Ana" }] });
   listarVeterinarios.mockResolvedValue({ data: [{ id: 3, nome: "Maria" }] });
   listarDisponibilidade.mockImplementation((...argumentos) => Promise.resolve({
@@ -240,12 +245,34 @@ test("veterinario bloqueia envios duplicados enquanto aguarda a API", async () =
   expect(container.querySelector('fieldset').disabled).toBe(false);
 });
 
-test("navegacao abre a tela de veterinarios", () => {
+const entrarNaClinica = async () => {
   act(() => root.render(<App />));
+  const equipe = [...container.querySelectorAll('.role-toggle-btn')]
+    .find(botao => botao.textContent.includes("Equipe Clínica"));
+  act(() => Simulate.click(equipe));
+  await enviar();
+};
+
+test("navegacao abre a tela de veterinarios apos entrar na clinica", async () => {
+  await entrarNaClinica();
   const aba = [...container.querySelectorAll('.navbar-tab')].find(botao => botao.textContent === "Veterinários");
-  act(() => Simulate.click(aba));
+  await act(async () => Simulate.click(aba));
   expect(container.querySelector('h1').textContent).toBe("Cadastro de Veterinários");
   expect(aba.getAttribute('aria-current')).toBe('page');
+});
+
+test.each([
+  ["Cadastro", "Cadastro de Tutor e Pet"],
+  ["Agendar consulta", "Agendar Consulta"],
+  ["Registrar Atendimento", "Atendimento"],
+  ["Histórico do pet", "Histórico do Pet"],
+])("navegacao da clinica preserva a tela %s", async (rotulo, titulo) => {
+  await entrarNaClinica();
+  const aba = [...container.querySelectorAll('.navbar-tab')].find(botao => botao.textContent === rotulo);
+  await act(async () => Simulate.click(aba));
+  expect(container.querySelector('h1').textContent).toContain(titulo);
+  expect(aba.getAttribute('aria-current')).toBe('page');
+  expect(container.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
 });
 
 test("veterinario permite tentar novamente apos falha de conexao", async () => {

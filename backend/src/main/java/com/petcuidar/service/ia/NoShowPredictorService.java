@@ -1,5 +1,6 @@
 package com.petcuidar.service.ia;
 
+import com.petcuidar.config.IaProperties;
 import com.petcuidar.dto.PredicaoNoShowDTO;
 import com.petcuidar.model.Consulta;
 import com.petcuidar.model.StatusConsulta;
@@ -8,11 +9,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
-import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -29,6 +28,11 @@ import java.util.Set;
  * da consulta. Quando o microservico nao responde ou devolve uma resposta
  * invalida, o DTO deixa isso explicito em vez de transformar uma heuristica
  * local em uma probabilidade aparentemente produzida pelo modelo.</p>
+ *
+ * <p>Resiliencia: timeout (ia.predicao.timeout-ms, variavel
+ * NOSHOW_PREDICTOR_TIMEOUT_MS) e um {@link CircuitBreakerIa} proprio
+ * (ia.predicao.circuit-breaker.*). Com o circuito aberto, a resposta e
+ * "score indisponivel" sem chamar o microservico.</p>
  */
 @Service
 public class NoShowPredictorService {
@@ -42,23 +46,47 @@ public class NoShowPredictorService {
     private final ConsultaRepository consultaRepository;
     private final RestClient restClient;
     private final Clock clock;
+    private final CircuitBreakerIa circuitBreaker;
 
     @Autowired
     public NoShowPredictorService(
             ConsultaRepository consultaRepository,
             RestClient.Builder restClientBuilder,
             @Value("${noshow.predictor.base-url:http://localhost:8000}") String baseUrl,
-            @Value("${noshow.predictor.timeout-ms:5000}") long timeoutMs) {
-        this(consultaRepository, criarCliente(restClientBuilder, baseUrl, timeoutMs), Clock.systemDefaultZone());
+            IaProperties props) {
+        this(consultaRepository,
+                criarCliente(restClientBuilder, baseUrl, props.timeoutMs(props.getPredicao())),
+                Clock.systemDefaultZone(),
+                new CircuitBreakerIa("predicao-no-show", props.circuitBreaker(props.getPredicao()),
+                        Clock.systemUTC()));
     }
 
+    /** Timeout explicito e circuit breaker com os limites padrao. */
+    public NoShowPredictorService(ConsultaRepository consultaRepository, RestClient.Builder restClientBuilder,
+                                  String baseUrl, long timeoutMs) {
+        this(consultaRepository, criarCliente(restClientBuilder, baseUrl, timeoutMs), Clock.systemDefaultZone(),
+                new CircuitBreakerIa("predicao-no-show", new IaProperties.CircuitBreaker(), Clock.systemUTC()));
+    }
+
+    /** Para testes: circuit breaker com os limites padrao. */
     NoShowPredictorService(ConsultaRepository consultaRepository, RestClient restClient, Clock clock) {
+        this(consultaRepository, restClient, clock,
+                new CircuitBreakerIa("predicao-no-show", new IaProperties.CircuitBreaker(), clock));
+    }
+
+    NoShowPredictorService(ConsultaRepository consultaRepository, RestClient restClient, Clock clock,
+                           CircuitBreakerIa circuitBreaker) {
         this.consultaRepository = consultaRepository;
         this.restClient = restClient;
         this.clock = clock;
+        this.circuitBreaker = circuitBreaker;
     }
 
     public PredicaoNoShowDTO calcular(Consulta consulta) {
+        if (!circuitBreaker.permitirChamada()) {
+            log.warn("Circuit breaker da predicao aberto - score indisponivel sem chamar o microservico");
+            return indisponivel();
+        }
         try {
             PredicaoRequest request = montarRequest(consulta);
             PredicaoResponse response = restClient.post()
@@ -71,13 +99,20 @@ public class NoShowPredictorService {
 
             if (!respostaValida(response)) {
                 log.warn("Microservico de no-show devolveu resposta invalida");
+                circuitBreaker.registrarFalha();
                 return indisponivel();
             }
+            circuitBreaker.registrarSucesso();
             return new PredicaoNoShowDTO(response.score(), response.categoria(), response.motivo());
         } catch (RuntimeException exception) {
-            log.warn("Microservico de no-show indisponivel: {}", exception.getMessage());
+            log.warn("Microservico de no-show indisponivel: {}", exception.getClass().getSimpleName());
+            circuitBreaker.registrarFalha();
             return indisponivel();
         }
+    }
+
+    public CircuitBreakerIa.Metricas obterMetricas() {
+        return circuitBreaker.obterMetricas();
     }
 
     private PredicaoRequest montarRequest(Consulta consulta) {
@@ -110,7 +145,6 @@ public class NoShowPredictorService {
 
     private static RestClient criarCliente(RestClient.Builder builder, String baseUrl, long timeoutMs) {
         Duration timeout = Duration.ofMillis(Math.max(1, timeoutMs));
-        HttpClient httpClient = HttpClient.newBuilder().connectTimeout(timeout).build();
         org.springframework.http.client.SimpleClientHttpRequestFactory requestFactory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(timeout);
         requestFactory.setReadTimeout(timeout);

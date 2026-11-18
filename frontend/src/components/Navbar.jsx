@@ -5,7 +5,9 @@ export default function Navbar({ abaAtiva, setAbaAtiva, usuario, onLogout }) {
         { id: 'painel', label: 'Painel do dia' },
         { id: 'agendamento', label: 'Agendar consulta' },
         { id: 'cadastro', label: 'Cadastro' },
-        { id: 'historico', label: 'Histórico do pet' }
+        { id: 'historico', label: 'Histórico do pet' },
+        { id: 'atendimentos', label: 'Registrar Atendimento' },
+        { id: 'veterinarios', label: 'Veterinários' }
     ];
 
     return (
@@ -25,8 +27,9 @@ export default function Navbar({ abaAtiva, setAbaAtiva, usuario, onLogout }) {
                     <button
                         key={item.id}
                         type="button"
-                        onClick={() => setAbaAtiva && setAbaAtiva(item.id)}
+                        onClick={() => setAbaAtiva(item.id)}
                         className={`navbar-tab ${abaAtiva === item.id ? 'active' : ''}`}
+                        aria-current={abaAtiva === item.id ? 'page' : undefined}
                     >
                         {item.label}
                     </button>

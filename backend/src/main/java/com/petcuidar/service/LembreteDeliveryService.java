@@ -2,6 +2,8 @@ package com.petcuidar.service;
 
 import com.petcuidar.config.EmailProperties;
 import com.petcuidar.dto.LembreteResponseDTO;
+import com.petcuidar.exception.IntegracaoExternaIndisponivelException;
+import com.petcuidar.exception.IntegracaoExternaTimeoutException;
 import com.petcuidar.exception.OperacaoNaoPermitidaException;
 import com.petcuidar.exception.RecursoNaoEncontradoException;
 import com.petcuidar.model.Consulta;
@@ -41,8 +43,32 @@ public class LembreteDeliveryService {
         this.properties = properties;
     }
 
+    static final String MENSAGEM_FALHA_ENVIO = "Nao foi possivel entregar o lembrete por e-mail apos todas "
+            + "as tentativas. O lembrete ficou registrado com status FALHOU.";
+    static final String MENSAGEM_TIMEOUT_ENVIO = "O provedor de e-mail nao respondeu no tempo limite apos todas "
+            + "as tentativas. O lembrete ficou registrado com status FALHOU.";
+
+    /**
+     * Envio manual (POST /consultas/{id}/lembrete). O e-mail nao tem fallback:
+     * se a entrega terminar em FALHOU - nesta chamada ou em uma anterior -,
+     * responde 504 quando a ultima tentativa estourou o tempo limite e 502 nos
+     * demais casos. O lembrete continua gravado como FALHOU para auditoria.
+     * Falha de IA nao entra aqui: o texto ja saiu do template (usouFallback).
+     */
+    public LembreteResponseDTO dispararManual(Long consultaId) {
+        LembreteResponseDTO resultado = disparar(consultaId);
+        if (resultado.getStatus() != StatusEnvioLembrete.FALHOU) {
+            return resultado;
+        }
+        if (EmailDeliveryException.indicaTimeout(resultado.getUltimoErro())) {
+            throw new IntegracaoExternaTimeoutException(MENSAGEM_TIMEOUT_ENVIO);
+        }
+        throw new IntegracaoExternaIndisponivelException(MENSAGEM_FALHA_ENVIO);
+    }
+
     /**
      * Ponto unico de entrega usado tanto pelo endpoint manual quanto pelo job.
+     * Nunca lanca excecao por falha de entrega: devolve o lembrete com status FALHOU.
      * A sincronizacao garante idempotencia dentro da instancia unica suportada
      * pelo SQLite; a restricao UNIQUE em lembretes.consulta_id protege o banco.
      */

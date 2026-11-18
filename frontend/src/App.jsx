@@ -18,6 +18,8 @@ import PainelRecepcionista from './components/PainelRecepcionista';
 import CadastroTutorPet from './components/CadastroTutorPet';
 import AgendamentoForm from './components/AgendamentoForm';
 import HistoricoPet from './components/HistoricoPet';
+import FormularioAtendimento from './components/FormularioAtendimento';
+import Veterinarios from './components/Veterinarios';
 
 export default function App() {
     const [usuarioLogado, setUsuarioLogado] = useState(null);
@@ -121,8 +123,8 @@ export default function App() {
     return (
         <div className="app-container">
             <Navbar
-                aba={abaClinica}
-                setAba={setAbaClinica}
+                abaAtiva={abaClinica}
+                setAbaAtiva={setAbaClinica}
                 usuario={usuarioLogado}
                 onLogout={() => {
                     setUsuarioLogado(null);
@@ -134,6 +136,8 @@ export default function App() {
                 {abaClinica === 'cadastro' && <CadastroTutorPet />}
                 {abaClinica === 'agendamento' && <AgendamentoForm />}
                 {abaClinica === 'historico' && <HistoricoPet />}
+                {abaClinica === 'atendimentos' && <FormularioAtendimento />}
+                {abaClinica === 'veterinarios' && <Veterinarios />}
             </main>
         </div>
     );
