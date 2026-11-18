@@ -33,8 +33,7 @@ que foi descrito na Secao 4 do documento de arquitetura.
    estatico habilitada, e enviar o conteudo de `build/`.
 3. Criar uma distribuicao CloudFront apontando para o bucket, para HTTPS e
    cache do conteudo estatico.
-4. Definir `REACT_APP_API_URL` (no `.env` usado durante o `npm run build`)
-   apontando para a URL publica do back-end (passo seguinte).
+4. Defina `REACT_APP_API_URL=/api` antes do build. Configure o encaminhamento dessa rota conforme a seção de autenticação.
 
 ## Back-end (Spring Boot) — Elastic Beanstalk
 
@@ -62,6 +61,36 @@ do free tier), instalar o Java 17 e rodar o JAR diretamente com
 `java -jar pet-cuidar-backend.jar`, atras de um Nginx como proxy reverso com
 HTTPS (Let's Encrypt) ou de um Application Load Balancer com certificado do
 ACM.
+
+## Autenticação por e-mail
+
+Defina as variáveis abaixo no back-end antes de iniciar o aplicativo.
+
+| Variável | Valor |
+| --- | --- |
+| `AUTH_ADMIN_EMAIL` | E-mail do primeiro Admin. Deve ser um endereço válido e livre. |
+| `AUTH_SECURE_COOKIE` | `true` em HTTPS. Use `false` para desenvolvimento local por HTTP. |
+| `EMAIL_PROVIDER` | `resend` para entrega de códigos e lembretes. |
+| `RESEND_API_KEY` | Chave do ambiente Resend, armazenada como segredo. |
+| `EMAIL_FROM` | Remetente habilitado no Resend. |
+| `APP_CORS_ALLOWED_ORIGIN` | Origem HTTPS exata onde o React é servido. |
+
+O Flyway cria as tabelas de autenticação e vincula tutores existentes com endereços inequívocos. O Admin cadastra colaboradores e associa endereços de veterinários pela tela **Contas da equipe**.
+
+Para publicar o front e a API na mesma origem, crie um comportamento `/api/*` no CloudFront com o back-end como origem HTTPS. Permita os métodos da API e use **CachingDisabled**. Configure a política de requisição à origem para encaminhar os cookies da sessão, os cabeçalhos da aplicação e os parâmetros de consulta. [Políticas de requisição à origem no CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/origin-request-understand-origin-request-policy.html). Uma CloudFront Function associada ao evento de requisição do visitante pode retirar o prefixo encaminhado ao origin.
+
+```javascript
+function handler(event) {
+    var request = event.request;
+    request.uri = request.uri.slice(4);
+    request.headers['x-pet-cuidar-client-ip'] = { value: event.viewer.ip };
+    return request;
+}
+```
+
+Configure `SERVER_FORWARD_HEADERS_STRATEGY=native` e defina `AUTH_TRUSTED_PROXIES` com a expressão regular dos endereços dos proxies imediatos autorizados a conectar ao Tomcat. Restrinja a origem à cadeia de proxies que grava `X-Pet-Cuidar-Client-IP`. Para Nginx diretamente exposto ao navegador, sobrescreva esse cabeçalho com `proxy_set_header X-Pet-Cuidar-Client-IP $remote_addr;`. O acesso direto em desenvolvimento mantém a configuração padrão. [IP do visitante em CloudFront Functions](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-event-structure.html). [Configuração de proxy do Spring Boot](https://docs.spring.io/spring-boot/docs/3.2.7/reference/html/howto.html).
+
+Confirme que `/api/auth/sessao` responde `401` sem cookie e que a solicitação de código e a validação chegam ao back-end. Mantenha cookies, corpo da requisição e códigos fora dos logs do proxy.
 
 ## Microserviço de predição de no-show (Python / FastAPI)
 
@@ -113,7 +142,7 @@ back-end é exposto. O `docker-compose.yml` na raiz do repositório já faz isso
 5. HTTPS: colocar um Nginx com Let's Encrypt (ou um ALB com certificado do ACM)
    na frente da porta 8080 do back-end. O front no CloudFront é HTTPS, então o
    navegador bloqueia chamadas para um back-end só em HTTP.
-6. No build do front, `REACT_APP_API_URL=https://<dominio-do-back-end>`.
+6. No build do front, use `REACT_APP_API_URL=/api`. Configure a rota de API no CloudFront conforme a seção de autenticação.
 
 O back-end encontra o microserviço por `NOSHOW_PREDICTOR_BASE_URL=http://predicao:8000`,
 que o compose já define. O banco fica no volume `petcuidar-data` (`/data/petcuidar.db`

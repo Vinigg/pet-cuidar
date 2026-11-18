@@ -174,6 +174,11 @@ public class AtendimentoService {
      * @return Lista de DTOs dos atendimentos
      */
     @Transactional(readOnly = true)
+    public List<AtendimentoResponseDTO> listarAtendimentosPorPet(Long petId, Long veterinarioId) {
+        return historicoRepository.findByPetIdAndConsultaVeterinarioIdOrderByDataDesc(petId, veterinarioId)
+                .stream().map(AtendimentoResponseDTO::from).toList();
+    }
+
     public List<AtendimentoResponseDTO> listarAtendimentosPorPet(Long petId) {
         return historicoRepository.findByPetIdOrderByDataDesc(petId)
                 .stream()

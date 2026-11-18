@@ -1,14 +1,6 @@
 import React from 'react';
 
-export default function Navbar({ abaAtiva, setAbaAtiva, usuario, onLogout }) {
-    const abas = [
-        { id: 'painel', label: 'Painel do dia' },
-        { id: 'agendamento', label: 'Agendar consulta' },
-        { id: 'cadastro', label: 'Cadastro' },
-        { id: 'historico', label: 'Histórico do pet' },
-        { id: 'atendimentos', label: 'Registrar Atendimento' },
-        { id: 'veterinarios', label: 'Veterinários' }
-    ];
+export default function Navbar({ abaAtiva, setAbaAtiva, usuario, onLogout, saindo, abas, perfil }) {
 
     return (
         <header className="navbar">
@@ -17,7 +9,7 @@ export default function Navbar({ abaAtiva, setAbaAtiva, usuario, onLogout }) {
                 <div>
                     <span className="navbar-logo-text">Pet Cuidar</span>
                     <span style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
-            Recepção & Clínica
+            {perfil}
           </span>
                 </div>
             </div>
@@ -43,14 +35,14 @@ export default function Navbar({ abaAtiva, setAbaAtiva, usuario, onLogout }) {
                     </div>
                     <div className="user-meta-name">
             <span className="user-name-title" style={{ color: '#FFFFFF' }}>
-              {usuario?.nome || 'Equipe Clínica'}
+              {usuario.nome}
             </span>
                         <span className="user-role-subtitle" style={{ color: 'rgba(255,255,255,0.7)' }}>
-              Profissional
+              {perfil}
             </span>
                     </div>
                 </div>
-                <button type="button" onClick={onLogout} className="btn-logout">
+                <button type="button" onClick={onLogout} disabled={saindo} className="btn-logout">
                     Sair
                 </button>
             </div>

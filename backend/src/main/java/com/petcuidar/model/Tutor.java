@@ -29,6 +29,9 @@ public class Tutor {
     @Column(unique = true)
     private String email;
 
+    @Column(name = "email_normalizado")
+    private String emailNormalizado;
+
     private String telefone;
 
     @Column(unique = true)
@@ -36,4 +39,10 @@ public class Tutor {
 
     @OneToMany(mappedBy = "tutor", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Pet> pets = new ArrayList<>();
+
+    @PrePersist
+    @PreUpdate
+    private void normalizarEmail() {
+        emailNormalizado = email == null ? null : EmailCanonico.normalizar(email);
+    }
 }

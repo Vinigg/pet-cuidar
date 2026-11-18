@@ -13,4 +13,13 @@ public interface PetRepository extends JpaRepository<Pet, Long> {
 			+ "from Pet p join p.tutor t where (:tutorId is null or t.id = :tutorId) "
 			+ "order by lower(p.nome), lower(t.nome), p.id")
 	List<PetOpcaoDTO> listarOpcoes(@Param("tutorId") Long tutorId);
+
+    List<Pet> findByTutorIdOrderByNomeAsc(Long tutorId);
+
+    @Query("""
+            select new com.petcuidar.dto.PetOpcaoDTO(p.id, p.nome, p.especie, p.tutor.nome) from Pet p
+            where exists (select 1 from Consulta c where c.pet = p and c.veterinario.id = :veterinarioId)
+            order by lower(p.nome), p.id
+            """)
+    List<PetOpcaoDTO> listarOpcoesVeterinario(@Param("veterinarioId") Long veterinarioId);
 }
