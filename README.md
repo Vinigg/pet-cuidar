@@ -59,8 +59,7 @@ de salvar separados. Bloqueios por data seguem disponiveis pela API.
 Contrato, regras e cuidados com a migracao do SQLite:
 [veterinarios-agenda.md](docs/veterinarios-agenda.md). Exemplos de requisicoes:
 [veterinarios-agenda.http](backend/requests/veterinarios-agenda.http).
-Faca backup do banco antes de atualizar um ambiente com dados reais. O projeto
-ainda precisa de autenticacao e autorizacao do perfil da recepcao para producao.
+Faca backup do banco antes de atualizar um ambiente com dados reais.
 
 ## Rodando o front-end
 
@@ -73,28 +72,20 @@ npm install
 npm start
 ```
 
-A aplicacao sobe em `http://localhost:3000` e consome a API pela URL definida
-em `REACT_APP_API_URL` (`.env`).
+A aplicação sobe em `http://localhost:3000`. Em desenvolvimento, o React encaminha as chamadas à API local na porta 8080. Para um build de produção, veja [Autenticação por e-mail no deploy](DEPLOY.md#autenticação-por-e-mail).
 
-## Fluxo para testar rapidamente
+## Login e painéis
 
-Na tela inicial, selecione **Equipe Clinica** e clique em **Entrar no Pet
-Cuidar** para acessar as abas abaixo. O login atual e apenas uma simulacao
-de interface, sem autenticacao no backend.
+Informe o e-mail cadastrado e digite o código de oito dígitos recebido. O código vale por dez minutos e só pode ser usado uma vez. Para testar localmente com entrega de e-mail, inicie o back-end com `AUTH_ADMIN_EMAIL`, `AUTH_SECURE_COOKIE=false`, `EMAIL_PROVIDER=resend`, `RESEND_API_KEY` e `EMAIL_FROM`. O provedor `local` simula o envio.
 
-1. Aba **Cadastro**: cadastre um tutor com pelo menos um pet (anote o `id` do
-   pet retornado, se quiser consultar via API/Postman).
-2. Aba **Agendar consulta**: escolha um veterinario (os dois de exemplo ja
-   existem), uma data e um horario livre; informe o id do pet cadastrado.
-3. Aba **Painel do dia**: veja a consulta criada, calcule o risco de falta e
-   dispare o lembrete (gerado por IA, com fallback automatico).
-4. Aba **Historico do pet**: consulte o resumo gerado por IA e o historico
-   completo do pet.
-5. Aba **Veterinarios**: informe nome, especialidade e ao menos um dia de
-  atendimento; cadastre os periodos e confirme o cadastro. O profissional
-  fica disponivel ao abrir a aba **Agendar consulta**.
-6. Aba **Registrar Atendimento**: registre ou atualize o atendimento de um
-   pet, respeitando o estado da consulta.
+| Perfil | Área |
+| --- | --- |
+| Tutor | Pets e consultas da própria conta. O autocadastro verifica o e-mail antes de criar a conta. |
+| Veterinário | Histórico de pets vinculados às suas consultas e registro de atendimentos. |
+| Colaborador | Painel do dia, agendamento e cadastro de tutores e pets. |
+| Admin | Gestão de veterinários e cadastro de contas da equipe. |
+
+O Admin inicial entra com o e-mail configurado em `AUTH_ADMIN_EMAIL`. Em **Veterinários**, cadastre o profissional e a escala. Em **Contas da equipe**, vincule o e-mail do veterinário e cadastre os colaboradores.
 
 ## Integracoes de IA, predicao e e-mail
 
@@ -152,13 +143,17 @@ de requisicoes da API: [consultas-lembretes.http](backend/requests/consultas-lem
 
 ## Endpoints principais da API
 
+Rotas privadas exigem a sessão retornada por `POST /auth/verificar`. Em chamadas diretas, envie o cookie `pc_sessao` e, para métodos que alteram dados, o cabeçalho `X-Pet-Cuidar: 1`.
+
 Erros seguem o formato padrao `{status, mensagem, timestamp}`; a tabela de
 quando cada codigo e usado (400, 404, 409, 500, 502, 504) esta em
 [docs/erros-api.md](docs/erros-api.md).
 
 | Metodo | Endpoint | Descricao |
 |---|---|---|
-| POST | `/tutores` | Cadastra tutor e pet(s) |
+| POST | `/auth/codigo` | Solicita código por e-mail para entrada ou autocadastro |
+| POST | `/auth/verificar` | Verifica o código e retorna a sessão ou a prova de cadastro |
+| POST | `/tutores` | Cadastra tutor e pet(s) pelo perfil Colaborador |
 | GET | `/veterinarios` | Lista veterinarios |
 | GET | `/veterinarios/{id}/disponibilidade?data=` | Horarios livres/ocupados no dia |
 | POST | `/consultas` | Cria agendamento (valida conflito de horario) |
@@ -175,16 +170,10 @@ Exemplos de requisicoes: `backend/requests/consultas-lembretes.http`.
 
 ## Limitacoes conhecidas do MVP
 
-- Sem autenticacao/login implementados (o documento de arquitetura previa JWT
-  para recepcionista/veterinario — fica como proxima etapa). Por isso as
-  operacoes "da recepcao" (status, cancelamento, reagendamento) nao estao
-  restritas por perfil.
 - Nao ha job automatico de lembretes (PC-029); o envio e disparado pela API.
 - SQLite e um banco em arquivo unico: adequado para o MVP e para demonstracao,
   mas nao recomendado para multiplas instancias do back-end rodando em
   paralelo (ver `DEPLOY.md`).
-- Autenticacao/autorizacao por JWT ainda nao foi implementada; portanto os
-  endpoints devem permanecer em ambiente controlado ate essa frente ser entregue.
 - O adapter Resend e o adapter de LLM estao implementados, mas so ficam
   homologados depois de uma validacao explicita com contas e credenciais reais.
 

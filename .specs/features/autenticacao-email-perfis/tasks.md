@@ -1,10 +1,10 @@
 # Autenticação por e-mail e perfis — Tasks
 
 **Design**: `.specs/features/autenticacao-email-perfis/design.md`
-**Status**: Approved
+**Status**: In Progress
 **Approved**: 2026-11-18 - user: "Aprovo o plano e a implementação"
 **Build**: `cd backend && mvn --batch-mode verify; cd frontend && npm run build`
-**Run api**: `cd backend && mvn --batch-mode -Dtest=AutenticacaoPerfisIntegrationTest test`
+**Run api**: `cd backend && mvn --batch-mode -Dtest=AutenticacaoPerfisIntegrationTest,DesafioEmailIntegrationTest test`
 **Run front**: `cd frontend && npm test -- --watchAll=false --runInBand --verbose --runTestsByPath src/App.test.jsx`
 
 ## Test Coverage Matrix
@@ -154,8 +154,8 @@ T6 → T7 → T8
 
 **Done when**:
 
-- [ ] As instruções cobrem administrador inicial, envio por Resend e proxy de mesma origem com HTTPS.
-- [ ] A verificação Build passa.
+- [x] As instruções cobrem administrador inicial, envio por Resend e proxy de mesma origem com HTTPS.
+- [x] A verificação Build passa.
 
 **Tests**: none
 **Gate**: build
@@ -174,25 +174,25 @@ Proof: run api | PASS C2 código correto inicia sessão do perfil cadastrado
 Proof: run api | PASS C3 sair invalida a sessão no servidor
 
 **C4** - recarregar restaura o perfil a partir do servidor (AUTH-01, AC 4)
-Proof: run front | ✓ C4 recarregar restaura o perfil a partir do servidor
+Proof: run front | √ C4 recarregar restaura o perfil a partir do servidor
 
 **C5** - Tutor vê somente sua navegação (AUTH-02, AC 1)
-Proof: run front | ✓ C5 Tutor vê somente sua navegação
+Proof: run front | √ C5 Tutor vê somente sua navegação
 
 **C6** - Veterinário vê somente sua navegação (AUTH-02, AC 2)
-Proof: run front | ✓ C6 Veterinário vê somente sua navegação
+Proof: run front | √ C6 Veterinário vê somente sua navegação
 
 **C7** - Colaborador vê somente sua navegação (AUTH-02, AC 3)
-Proof: run front | ✓ C7 Colaborador vê somente sua navegação
+Proof: run front | √ C7 Colaborador vê somente sua navegação
 
 **C8** - Admin vê somente a gestão de equipe (AUTH-02, AC 4)
-Proof: run front | ✓ C8 Admin vê somente a gestão de equipe
+Proof: run front | √ C8 Admin vê somente a gestão de equipe
 
 **C9** - visitante é enviado à entrada (AUTH-02, AC 5)
-Proof: run front | ✓ C9 visitante é enviado à entrada
+Proof: run front | √ C9 visitante é enviado à entrada
 
 **C10** - URL de outro perfil mostra acesso negado (AUTH-02, AC 6)
-Proof: run front | ✓ C10 URL de outro perfil mostra acesso negado
+Proof: run front | √ C10 URL de outro perfil mostra acesso negado
 
 **C11** - API retorna 401 para sessão ausente ou inválida (AUTH-02, AC 7)
 Proof: run api | PASS C11 API retorna 401 para sessão ausente ou inválida
@@ -225,7 +225,7 @@ Proof: run api | PASS C19 autocadastro sem prova não grava dados
 Proof: run api | PASS C20 autocadastro usa e-mail verificado e perfil Tutor
 
 **C21** - conclusão do autocadastro abre painel do Tutor (AUTH-04, AC 3)
-Proof: run front | ✓ C21 conclusão do autocadastro abre painel do Tutor
+Proof: run front | √ C21 conclusão do autocadastro abre painel do Tutor
 
 **C22** - código incorreto expirado consumido ou substituído é rejeitado (Casos de borda, AC 1)
 Proof: run api | PASS C22 código incorreto expirado consumido ou substituído é rejeitado
@@ -249,4 +249,4 @@ Proof: run api | PASS C27 e-mail ambíguo não permite autenticação
 
 **Settled mid-build:** none
 **Dispatched:** none
-**Walked:** pending
+**Walked:** Chrome headless, API Spring Boot, banco SQLite descartável e servidor HTTP local simulando o Resend. Admin entrou por código, cadastrou colaborador, vinculou veterinário, recarregou o painel e saiu. Colaborador abriu o painel do dia e recebeu acesso negado em rota clínica direta e na API clínica. Veterinário abriu histórico e atendimento. Tutor verificou o e-mail, cadastrou a conta e o pet pela interface, acessou suas consultas e teve a sessão revogada ao sair.

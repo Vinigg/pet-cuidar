@@ -21,6 +21,8 @@ services:
     environment:
       NOSHOW_PREDICTOR_BASE_URL: http://predicao:8000
       APP_CORS_ALLOWED_ORIGIN: ${APP_CORS_ALLOWED_ORIGIN:-http://localhost:3000}
+      AUTH_ADMIN_EMAIL: ${AUTH_ADMIN_EMAIL:-}
+      AUTH_SECURE_COOKIE: ${AUTH_SECURE_COOKIE:-true}
       # Integracoes externas: simuladores por padrao. Em producao, defina no .env.
       LLM_PROVIDER: ${LLM_PROVIDER:-simulador}
       IA_OPENAI_API_KEY: ${IA_OPENAI_API_KEY:-}
