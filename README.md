@@ -78,6 +78,10 @@ em `REACT_APP_API_URL` (`.env`).
 
 ## Fluxo para testar rapidamente
 
+Na tela inicial, selecione **Equipe Clinica** e clique em **Entrar no Pet
+Cuidar** para acessar as abas abaixo. O login atual e apenas uma simulacao
+de interface, sem autenticacao no backend.
+
 1. Aba **Cadastro**: cadastre um tutor com pelo menos um pet (anote o `id` do
    pet retornado, se quiser consultar via API/Postman).
 2. Aba **Agendar consulta**: escolha um veterinario (os dois de exemplo ja
@@ -89,6 +93,8 @@ em `REACT_APP_API_URL` (`.env`).
 5. Aba **Veterinarios**: informe nome, especialidade e ao menos um dia de
   atendimento; cadastre os periodos e confirme o cadastro. O profissional
   fica disponivel ao abrir a aba **Agendar consulta**.
+6. Aba **Registrar Atendimento**: registre ou atualize o atendimento de um
+   pet, respeitando o estado da consulta.
 
 ## Integracoes de IA, predicao e e-mail
 
