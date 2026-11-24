@@ -9,22 +9,21 @@ import {
   listarVeterinarios,
   listarConsultasDoDia
 } from '../api/api';
+import { dataLocal } from '../utils/datas';
 
 // A API devolve erros no formato {status, mensagem, timestamp}.
 const mensagemDaApi = (err, padrao) =>
   err.response?.data?.mensagem || err.response?.data?.message || padrao;
 
-const dataDeHoje = () => {
-  // Data local (toISOString usa UTC e pode virar o dia seguinte à noite)
-  const agora = new Date();
-  return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
-};
-
 export default function FormularioAtendimento() {
   // Estados para seleção
   const [pets, setPets] = useState([]);
   const [veterinarios, setVeterinarios] = useState([]);
+  const [dataSelecionada, setDataSelecionada] = useState(dataLocal);
   const [consultas, setConsultas] = useState([]);
+  const [carregandoConsultas, setCarregandoConsultas] = useState(true);
+  const [erroAgenda, setErroAgenda] = useState('');
+  const [revisaoAgenda, setRevisaoAgenda] = useState(0);
   const [atendimentosExistentes, setAtendimentosExistentes] = useState([]);
 
   // Estados do formulário
@@ -70,19 +69,35 @@ export default function FormularioAtendimento() {
     carregarOpcoes();
   }, []);
 
-  // Carregar consultas do dia
-  const carregarConsultas = async () => {
-    try {
-      const response = await listarConsultasDoDia(dataDeHoje());
-      setConsultas(Array.isArray(response.data) ? response.data : []);
-    } catch (err) {
-      console.error('Erro ao carregar consultas:', err);
-    }
-  };
-
   useEffect(() => {
-    carregarConsultas();
-  }, []);
+    if (!dataSelecionada) return;
+    let ativo = true;
+
+    listarConsultasDoDia(dataSelecionada).then(({ data }) => {
+      if (ativo) setConsultas(Array.isArray(data) ? data : []);
+    }).catch((err) => {
+      if (ativo) setErroAgenda(mensagemDaApi(err, 'Não foi possível carregar as consultas. Tente novamente.'));
+    }).finally(() => {
+      if (ativo) setCarregandoConsultas(false);
+    });
+
+    return () => { ativo = false; };
+  }, [dataSelecionada, revisaoAgenda]);
+
+  const mudarData = (novaData) => {
+    if (novaData > dataLocal() || novaData === dataSelecionada) return;
+
+    setDataSelecionada(novaData);
+    setConsultas([]);
+    setCarregandoConsultas(Boolean(novaData));
+    setErroAgenda('');
+    setConsultaSelecionada('');
+    setAtendimentoSelecionado('');
+    setDescricaoClinica('');
+    setErrosValidacao({});
+    setErro(null);
+    setMensagemSucesso(null);
+  };
 
   // Carregar atendimentos quando pet é selecionado
   useEffect(() => {
@@ -106,6 +121,7 @@ export default function FormularioAtendimento() {
 
   // Carregar dados do atendimento ao selecionar para atualizar
   useEffect(() => {
+    let ativo = true;
     const carregarAtendimento = async () => {
       if (!atendimentoSelecionado || modo !== 'atualizar') {
         setDescricaoClinica('');
@@ -115,18 +131,19 @@ export default function FormularioAtendimento() {
 
       try {
         const response = await obterAtendimento(atendimentoSelecionado);
+        if (!ativo) return;
         const atendimento = response.data;
         setDescricaoClinica(atendimento.descricaoClinica || '');
         if (atendimento.consultaId) {
           setConsultaSelecionada(atendimento.consultaId);
         }
       } catch (err) {
-        console.error('Erro ao carregar atendimento:', err);
-        setErro('Erro ao carregar atendimento. Tente novamente.');
+        if (ativo) setErro('Erro ao carregar atendimento. Tente novamente.');
       }
     };
 
     carregarAtendimento();
+    return () => { ativo = false; };
   }, [atendimentoSelecionado, modo]);
 
   // Validar formulário
@@ -187,7 +204,10 @@ export default function FormularioAtendimento() {
       setErrosValidacao({});
 
       // A consulta passou para REALIZADA no backend: recarrega para mostrar o novo status.
-      await carregarConsultas();
+      setConsultas([]);
+      setErroAgenda('');
+      setCarregandoConsultas(true);
+      setRevisaoAgenda((valor) => valor + 1);
 
       // Recarregar atendimentos
       if (petSelecionado) {
@@ -315,6 +335,20 @@ export default function FormularioAtendimento() {
         </div>
 
         <form onSubmit={modo === 'registrar' ? handleRegistrar : handleAtualizar}>
+          <div className="form-group">
+            <label className="input-label" htmlFor="data-consulta">Data da consulta</label>
+            <input
+              id="data-consulta"
+              className="select-custom"
+              type="date"
+              value={dataSelecionada}
+              max={dataLocal()}
+              onChange={(e) => mudarData(e.target.value)}
+              disabled={loading}
+            />
+          </div>
+          {carregandoConsultas && <p role="status">Carregando consultas…</p>}
+          {erroAgenda && <div className="alert alert-error" role="alert">{erroAgenda}</div>}
           {/* Seção 1: Seleção de Pet */}
           <div className="form-section">
             <h2 className="form-section-title">1. Paciente</h2>
@@ -397,7 +431,7 @@ export default function FormularioAtendimento() {
                   id="consulta"
                   className={`select-custom ${errosValidacao.consultaSelecionada ? 'error' : ''}`}
                   value={consultaSelecionada}
-                  disabled={!petSelecionado || !veterinarioSelecionado}
+                  disabled={!dataSelecionada || carregandoConsultas || Boolean(erroAgenda) || consultasDisponiveis.length === 0 || loading}
                   onChange={(e) => {
                     setConsultaSelecionada(e.target.value);
                     if (errosValidacao.consultaSelecionada) {
@@ -406,11 +440,9 @@ export default function FormularioAtendimento() {
                   }}
                 >
                   <option value="">
-                    {!petSelecionado || !veterinarioSelecionado
-                      ? 'Selecione um pet e um veterinário primeiro'
-                      : consultasDisponiveis.length === 0
-                        ? 'Nenhuma consulta hoje para este pet e veterinário'
-                        : 'Selecione uma consulta...'}
+                    {!dataSelecionada && 'Selecione uma data primeiro'}
+                    {carregandoConsultas && 'Aguarde o carregamento'}
+                    {dataSelecionada && !carregandoConsultas && 'Selecione uma consulta...'}
                   </option>
                   {consultasDisponiveis.map(consulta => (
                     <option key={consulta.id} value={consulta.id}>
@@ -418,6 +450,8 @@ export default function FormularioAtendimento() {
                     </option>
                   ))}
                 </select>
+                {dataSelecionada && !carregandoConsultas && !erroAgenda && consultasDisponiveis.length === 0 &&
+                  <p className="empty-state">Nenhuma consulta na data selecionada.</p>}
                 {errosValidacao.consultaSelecionada && (
                   <span className="input-error-msg">{errosValidacao.consultaSelecionada}</span>
                 )}

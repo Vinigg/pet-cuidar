@@ -17,6 +17,8 @@ let root;
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   jest.resetAllMocks();
+  jest.useFakeTimers();
+  jest.setSystemTime(new Date(2026, 10, 24, 23, 30));
   listarPets.mockResolvedValue({ data: [{ id: 1, nome: "Rex" }] });
   listarVeterinarios.mockResolvedValue({ data: [{ id: 3, nome: "Bia" }] });
   listarConsultasDoDia.mockResolvedValue({
@@ -30,6 +32,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  jest.useRealTimers();
 });
 
 const selecionar = async (seletor, valor) => {
@@ -74,4 +77,115 @@ test("registro com sucesso recarrega as consultas para mostrar o novo status", a
 
   expect(listarConsultasDoDia).toHaveBeenCalledTimes(2);
   expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+
+const abrirFormulario = async () => {
+  await act(async () => root.render(<FormularioAtendimento />));
+};
+
+const selecionarContextoRegistravel = async () => {
+  await selecionar("#pet", "1");
+  await selecionar("#veterinario", "3");
+};
+
+const valoresDasOpcoes = (seletor) =>
+  Array.from(container.querySelectorAll(seletor + " option"), (opcao) => opcao.value).filter(Boolean);
+
+const consultaNaData = (id, data, campos = {}) => ({
+  id, petId: 1, veterinarioId: 3, petNome: "Rex", dataHora: data + "T10:00:00",
+  status: "AGENDADA", ...campos,
+});
+
+const aguardarResposta = () => {
+  let resolver;
+  const promessa = new Promise((resolve) => { resolver = resolve; });
+  return { promessa, resolver };
+};
+
+test("C1 abre com a data local de hoje", async () => {
+  await abrirFormulario();
+
+  expect(container.querySelector("#data-consulta").value).toBe("2026-11-24");
+  expect(listarConsultasDoDia).toHaveBeenCalledWith("2026-11-24");
+});
+
+test("C2 impede selecionar uma data futura", async () => {
+  listarConsultasDoDia.mockResolvedValue({ data: [consultaNaData(2, "2026-11-24")] });
+  await abrirFormulario();
+  await selecionarContextoRegistravel();
+
+  const campoData = container.querySelector("#data-consulta");
+  expect(campoData.max).toBe("2026-11-24");
+  await selecionar("#data-consulta", "2026-11-25");
+  expect(campoData.value).toBe("2026-11-24");
+  expect(valoresDasOpcoes("#consulta")).toEqual(["2"]);
+  expect(listarConsultasDoDia).not.toHaveBeenCalledWith("2026-11-25");
+});
+
+test("C4 trocar o dia limpa a consulta e a descrição", async () => {
+  listarConsultasDoDia.mockResolvedValueOnce({ data: [consultaNaData(2, "2026-11-24")] })
+    .mockResolvedValueOnce({ data: [consultaNaData(7, "2026-11-23")] });
+  await abrirFormulario();
+  await selecionarContextoRegistravel();
+  await selecionar("#consulta", "2");
+  await selecionar("textarea", "Descrição digitada para a primeira consulta.");
+  expect(container.querySelector("#consulta").value).toBe("2");
+
+  await selecionar("#data-consulta", "2026-11-23");
+
+  expect(container.querySelector("#consulta").value).toBe("");
+  expect(container.querySelector("textarea").value).toBe("");
+  expect(valoresDasOpcoes("#consulta")).toEqual(["7"]);
+});
+
+test("C12 informa quando a data não tem consultas", async () => {
+  listarConsultasDoDia.mockResolvedValue({ data: [] });
+  await abrirFormulario();
+  await selecionarContextoRegistravel();
+  await selecionar("#data-consulta", "2026-11-23");
+
+  expect(container.textContent).toContain("Nenhuma consulta na data selecionada.");
+  expect(valoresDasOpcoes("#consulta")).toEqual([]);
+});
+
+test("C13 avisa da falha e retira as opções anteriores", async () => {
+  listarConsultasDoDia.mockResolvedValueOnce({ data: [consultaNaData(2, "2026-11-24")] })
+    .mockRejectedValueOnce(new Error("Sem rede"));
+  await abrirFormulario();
+  await selecionarContextoRegistravel();
+  expect(valoresDasOpcoes("#consulta")).toEqual(["2"]);
+
+  await selecionar("#data-consulta", "2026-11-23");
+
+  expect(container.querySelector('[role="alert"]').textContent)
+    .toContain("Não foi possível carregar as consultas.");
+  expect(valoresDasOpcoes("#consulta")).toEqual([]);
+  expect(container.querySelector("#consulta").disabled).toBe(true);
+});
+
+test("uma agenda anterior não é restaurada por resposta atrasada", async () => {
+  const agendaAnterior = aguardarResposta();
+  listarConsultasDoDia.mockImplementationOnce(() => agendaAnterior.promessa)
+    .mockResolvedValueOnce({ data: [consultaNaData(7, "2026-11-23")] });
+  await abrirFormulario();
+  await selecionarContextoRegistravel();
+  await selecionar("#data-consulta", "2026-11-23");
+
+  await act(async () => agendaAnterior.resolver({ data: [consultaNaData(2, "2026-11-24")] }));
+
+  expect(valoresDasOpcoes("#consulta")).toEqual(["7"]);
+});
+
+test("C16 indica carregamento e desabilita a seleção de consultas", async () => {
+  const agenda = aguardarResposta();
+  listarConsultasDoDia.mockImplementationOnce(() => agenda.promessa);
+  await abrirFormulario();
+  await selecionarContextoRegistravel();
+
+  expect(container.querySelector('[role="status"]').textContent).toContain("Carregando consultas");
+  expect(container.querySelector("#consulta").disabled).toBe(true);
+
+  await act(async () => agenda.resolver({ data: [consultaNaData(2, "2026-11-24")] }));
+  expect(container.querySelector('[role="status"]')).toBeNull();
+  expect(container.querySelector("#consulta").disabled).toBe(false);
 });
