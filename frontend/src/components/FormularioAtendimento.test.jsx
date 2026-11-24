@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Simulate } from "react-dom/test-utils";
 import FormularioAtendimento from "./FormularioAtendimento";
 import {
-  registrarAtendimento, listarAtendimentosPorPet, listarPets, listarVeterinarios, listarConsultasDoDia,
+  atualizarAtendimento, registrarAtendimento, listarAtendimentosPorPet, listarPets, listarVeterinarios, listarConsultasDoDia,
 } from "../api/api";
 
 jest.mock("../api/api", () => ({
@@ -213,4 +213,110 @@ test("C5 registra uma consulta passada com os vínculos da seleção", async () 
   });
   expect(container.textContent).toContain("Atendimento registrado com sucesso!");
   expect(listarConsultasDoDia).toHaveBeenLastCalledWith("2026-11-23");
+});
+
+const registroClinico = (id, consultaId, descricaoClinica) => ({
+  id, consultaId, descricaoClinica,
+  dataAtendimento: "2026-11-24T14:00:00",
+  dataCriacao: "2026-11-24T14:00:00",
+  dataAtualizacao: "2026-11-24T14:00:00",
+  veterinarioNome: "Dra. Bia",
+});
+
+const registrosDaConsulta = [
+  registroClinico(21, 7, "Descrição original do prontuário antigo."),
+  registroClinico(22, 8, "Registro de outra consulta do mesmo pet."),
+  registroClinico(23, 7, "Descrição do complemento clínico."),
+];
+
+const selecionarModoAtualizar = async () => {
+  const botao = [...container.querySelectorAll("button")]
+    .find((elemento) => elemento.textContent === "Atualizar Existente");
+  await act(async () => Simulate.click(botao));
+};
+
+const abrirAtualizacaoDeConsultaPassada = async (registros = registrosDaConsulta) => {
+  listarConsultasDoDia.mockImplementation(async (data) => ({
+    data: data === "2026-11-23" ? [consultaNaData(7, data, { status: "REALIZADA" })] : [],
+  }));
+  listarAtendimentosPorPet.mockResolvedValue({ data: registros });
+  await abrirFormulario();
+  await selecionarModoAtualizar();
+  await selecionar("#data-consulta", "2026-11-23");
+  await selecionar("#consulta", "7");
+};
+
+test("C9 lista registros vinculados à consulta selecionada", async () => {
+  await abrirAtualizacaoDeConsultaPassada();
+
+  expect(valoresDasOpcoes("#atendimento")).toEqual(["21", "23"]);
+  expect(container.querySelector('#atendimento option[value="21"]').textContent)
+    .toContain("Descrição original do prontuário antigo.");
+  expect(container.textContent).not.toContain("Registro de outra consulta");
+});
+
+test("C10 preenche a descrição do registro escolhido", async () => {
+  await abrirAtualizacaoDeConsultaPassada();
+
+  await selecionar("#atendimento", "21");
+  expect(container.querySelector("textarea").value).toBe(registrosDaConsulta[0].descricaoClinica);
+  await selecionar("#atendimento", "23");
+  expect(container.querySelector("textarea").value).toBe(registrosDaConsulta[2].descricaoClinica);
+});
+
+test("C11 atualiza somente o registro selecionado", async () => {
+  const descricao = "Complemento com nova orientação clínica.";
+  atualizarAtendimento.mockResolvedValue({ data: registroClinico(23, 7, descricao) });
+  await abrirAtualizacaoDeConsultaPassada();
+  await selecionar("#atendimento", "23");
+  await selecionar("textarea", descricao);
+
+  await act(async () => Simulate.submit(container.querySelector("form")));
+
+  expect(atualizarAtendimento).toHaveBeenCalledTimes(1);
+  expect(atualizarAtendimento).toHaveBeenCalledWith({
+    atendimentoId: 23, veterinarioId: 3, descricaoClinica: descricao,
+  });
+  expect(registrarAtendimento).not.toHaveBeenCalled();
+  expect(container.textContent).toContain("Atendimento atualizado com sucesso!");
+  expect(container.querySelector("#data-consulta").value).toBe("2026-11-23");
+  expect(container.querySelector("#consulta").value).toBe("7");
+});
+
+test("C14 respostas antigas preservam a seleção mais recente", async () => {
+  const agendaAnterior = aguardarResposta();
+  const registrosAnteriores = aguardarResposta();
+  listarConsultasDoDia.mockImplementationOnce(() => agendaAnterior.promessa)
+    .mockResolvedValueOnce({ data: [
+      consultaNaData(8, "2026-11-23", { petId: 5 }),
+      consultaNaData(7, "2026-11-23"),
+    ] });
+  listarAtendimentosPorPet.mockImplementation((petId) => petId === 5
+    ? registrosAnteriores.promessa
+    : Promise.resolve({ data: registrosDaConsulta }));
+  await abrirFormulario();
+  await selecionarModoAtualizar();
+  await selecionar("#data-consulta", "2026-11-23");
+  await selecionar("#consulta", "8");
+  await selecionar("#consulta", "7");
+  await selecionar("#atendimento", "21");
+
+  await act(async () => {
+    agendaAnterior.resolver({ data: [consultaNaData(2, "2026-11-24")] });
+    registrosAnteriores.resolver({ data: [registroClinico(22, 8, "Resposta clínica antiga.")] });
+  });
+
+  expect(valoresDasOpcoes("#consulta")).toEqual(["8", "7"]);
+  expect(container.querySelector("#consulta").value).toBe("7");
+  expect(valoresDasOpcoes("#atendimento")).toEqual(["21", "23"]);
+  expect(container.querySelector("#atendimento").value).toBe("21");
+  expect(container.querySelector("textarea").value).toBe(registrosDaConsulta[0].descricaoClinica);
+});
+
+test("C15 informa quando a consulta não tem atendimento", async () => {
+  await abrirAtualizacaoDeConsultaPassada([registrosDaConsulta[1]]);
+
+  expect(container.textContent).toContain("Esta consulta ainda não tem atendimento registrado.");
+  expect(valoresDasOpcoes("#atendimento")).toEqual([]);
+  expect(container.querySelector('button[type="submit"]').disabled).toBe(true);
 });
