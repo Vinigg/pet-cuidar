@@ -8,6 +8,7 @@ Esta funcionalidade permite que veterinários autorizados registrem e atualizem 
 
 ✅ **Veterinário autorizado registra descrição clínica vinculada ao pet e à consulta**
 - Endpoint `POST /atendimentos` valida veterinário ativo
+- Registrar o atendimento marca a consulta como REALIZADA pela máquina de estados (ver `docs/consulta-estados.md`); consulta CANCELADA ou NAO_COMPARECEU responde 409 e consulta de outro pet responde 400
 - Descrição clínica é obrigatória e vinculada a pet e consulta existentes
 - Campos estruturados com validação de comprimento (10-2000 caracteres)
 

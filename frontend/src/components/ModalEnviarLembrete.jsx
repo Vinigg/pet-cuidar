@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { dispararLembrete } from '../api/api';
 import { Button, Badge } from './common/UIComponents';
 
 export default function ModalEnviarLembrete({ isOpen, onClose, consulta, onLembreteEnviado }) {
@@ -13,7 +13,7 @@ export default function ModalEnviarLembrete({ isOpen, onClose, consulta, onLembr
     setLoading(true);
     setErro(null);
     try {
-      const response = await axios.post(`http://localhost:8080/consultas/${consulta.id}/lembrete`);
+      const response = await dispararLembrete(consulta.id);
       setResultado(response.data);
       if (onLembreteEnviado) {
         onLembreteEnviado(response.data);
@@ -94,4 +94,4 @@ export default function ModalEnviarLembrete({ isOpen, onClose, consulta, onLembr
         </div>
       </div>
   );
-}
+}

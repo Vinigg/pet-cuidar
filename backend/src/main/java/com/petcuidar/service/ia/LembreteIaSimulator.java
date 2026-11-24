@@ -1,14 +1,10 @@
 package com.petcuidar.service.ia;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.stereotype.Component;
-
 /**
  * Simulador local (nao e integracao com LLM): permite rodar e demonstrar o
- * fluxo sem credenciais. Ativo quando ia.llm.provider=simulador (padrao).
+ * fluxo sem credenciais. Ativo quando ia.provider=simulador (padrao); o bean
+ * e registrado por {@link com.petcuidar.config.IaClientConfig}.
  */
-@Component
-@ConditionalOnProperty(name = "ia.provider", havingValue = "simulator", matchIfMissing = true)
 public class LembreteIaSimulator implements LembreteIaClient, ResumoIaClient {
     @Override
     public String gerar(DadosLembrete dados) {

@@ -1,0 +1,52 @@
+# Back-end + microservico de predicao, juntos.
+#
+# Serve para os dois cenarios:
+#   - local (teste de ponta a ponta): docker compose up --build
+#     e o front roda com `npm start` em frontend/ (http://localhost:3000)
+#   - producao numa EC2 unica: o mesmo arquivo, com as variaveis do .env
+#     (ver DEPLOY.md, secao "Deploy recomendado").
+#
+# O microservico NAO publica porta no host: so o back-end fala com ele, pela
+# rede interna do compose (http://predicao:8000).
+services:
+  mailpit:
+    image: axllent/mailpit:v1.27.4
+    profiles: ["local-email"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"
+      - "127.0.0.1:1025:1025"
+
+  predicao:
+    build: ./microservico-predicao
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      NOSHOW_PREDICTOR_BASE_URL: http://predicao:8000
+      APP_CORS_ALLOWED_ORIGIN: ${APP_CORS_ALLOWED_ORIGIN:-http://localhost:3000}
+      AUTH_ADMIN_EMAIL: ${AUTH_ADMIN_EMAIL:-}
+      AUTH_SECURE_COOKIE: ${AUTH_SECURE_COOKIE:-true}
+      SERVER_FORWARD_HEADERS_STRATEGY: ${SERVER_FORWARD_HEADERS_STRATEGY:-none}
+      AUTH_TRUSTED_PROXIES: "${AUTH_TRUSTED_PROXIES:-(?!)}"
+      # Integracoes externas: simuladores por padrao. Em producao, defina no .env.
+      LLM_PROVIDER: ${LLM_PROVIDER:-simulador}
+      IA_OPENAI_API_KEY: ${IA_OPENAI_API_KEY:-}
+      IA_OPENAI_MODEL: ${IA_OPENAI_MODEL:-gpt-4o-mini}
+      IA_OPENAI_BASE_URL: ${IA_OPENAI_BASE_URL:-https://api.openai.com/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-local}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-no-reply@petcuidar.local}
+      LEMBRETE_JOB_ENABLED: ${LEMBRETE_JOB_ENABLED:-false}
+    volumes:
+      - petcuidar-data:/data
+
+volumes:
+  petcuidar-data:

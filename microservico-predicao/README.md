@@ -72,10 +72,10 @@ Saída (idêntica ao `PredicaoNoShowDTO`):
 
 - O score **nunca** cancela, confirma ou reagenda consulta — é só apoio à decisão humana.
 - O score **sempre** vem com `motivo` explicável.
-- Se o modelo não estiver disponível, o serviço usa um fallback simples (taxa de faltas) e continua respondendo.
+- Se o arquivo do modelo não existir, o serviço **não sobe** (erro claro no log). Ele nunca devolve uma heurística disfarçada de score; quando o serviço está fora, o back-end responde `categoria: INDISPONIVEL` e o agendamento segue normalmente.
 
 ## Observação sobre os dados
 
 A clínica começa **sem histórico real** de faltas, então o modelo é treinado com
 um **dataset sintético** (`gerar_dataset.py`). Quando houver dados reais, basta
-substituir o CSV e rodar `treinar.py` de novo — a API não muda.
+substituir o CSV e rodar `treinar.py` de novo — a API não muda.

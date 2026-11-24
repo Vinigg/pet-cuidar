@@ -3,6 +3,7 @@ package com.petcuidar.service.email;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.petcuidar.config.EmailProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -11,6 +12,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.Map;
 
@@ -21,6 +23,7 @@ public class ResendEmailSender implements EmailSender {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
+    @Autowired
     public ResendEmailSender(EmailProperties properties, ObjectMapper objectMapper) {
         this(properties, objectMapper, HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5)).build());
@@ -69,6 +72,8 @@ public class ResendEmailSender implements EmailSender {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new EmailDeliveryException("Envio de e-mail interrompido", true, e);
+        } catch (HttpTimeoutException e) {
+            throw EmailDeliveryException.tempoEsgotado(e);
         } catch (IOException e) {
             throw new EmailDeliveryException("Provedor de e-mail indisponivel", true, e);
         }

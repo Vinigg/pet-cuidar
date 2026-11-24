@@ -1,6 +1,8 @@
 package com.petcuidar.service;
 
 import com.petcuidar.config.EmailProperties;
+import com.petcuidar.exception.IntegracaoExternaIndisponivelException;
+import com.petcuidar.exception.IntegracaoExternaTimeoutException;
 import com.petcuidar.exception.OperacaoNaoPermitidaException;
 import com.petcuidar.model.*;
 import com.petcuidar.repository.ConsultaRepository;
@@ -64,6 +66,75 @@ class LembreteDeliveryServiceTest {
 
         verify(sender, times(1)).enviar(anyString(), anyString(), anyString(), eq("lembrete-consulta-10"));
         verify(fixture.generator, times(1)).gerar(any());
+    }
+
+    @Test
+    void envioManualComFalhaDefinitivaResponde502EMantemLembreteFalhou() {
+        EmailSender sender = (destino, assunto, texto, chave) -> {
+            throw new EmailDeliveryException("HTTP 503", true);
+        };
+        Fixture fixture = new Fixture(sender);
+
+        IntegracaoExternaIndisponivelException erro = assertThrows(IntegracaoExternaIndisponivelException.class,
+                () -> fixture.service.dispararManual(10L));
+
+        assertFalse(erro.getMessage().contains("ana@example.com"));
+        assertEquals(StatusEnvioLembrete.FALHOU, fixture.lembrete.get().getStatusEnvio());
+        assertEquals(3, fixture.lembrete.get().getTentativas());
+    }
+
+    @Test
+    void envioManualComTimeoutEmTodasAsTentativasResponde504() {
+        AtomicInteger chamadas = new AtomicInteger();
+        EmailSender sender = (destino, assunto, texto, chave) -> {
+            chamadas.incrementAndGet();
+            throw EmailDeliveryException.tempoEsgotado(null);
+        };
+        Fixture fixture = new Fixture(sender);
+
+        assertThrows(IntegracaoExternaTimeoutException.class, () -> fixture.service.dispararManual(10L));
+        assertEquals(3, chamadas.get());
+        assertEquals(StatusEnvioLembrete.FALHOU, fixture.lembrete.get().getStatusEnvio());
+
+        // Chamada repetida: nao reenvia, mas continua sinalizando o timeout.
+        assertThrows(IntegracaoExternaTimeoutException.class, () -> fixture.service.dispararManual(10L));
+        assertEquals(3, chamadas.get());
+    }
+
+    @Test
+    void chamadaManualRepetidaDeLembreteFalhouContinuaResponde502() throws Exception {
+        EmailSender sender = mock(EmailSender.class);
+        doThrow(new EmailDeliveryException("HTTP 400", false)).when(sender).enviar(any(), any(), any(), any());
+        Fixture fixture = new Fixture(sender);
+
+        assertThrows(IntegracaoExternaIndisponivelException.class, () -> fixture.service.dispararManual(10L));
+        assertThrows(IntegracaoExternaIndisponivelException.class, () -> fixture.service.dispararManual(10L));
+        verify(sender, times(1)).enviar(any(), any(), any(), any());
+    }
+
+    @Test
+    void envioManualComSucessoResponde200() {
+        Fixture fixture = new Fixture((destino, assunto, texto, chave) -> { });
+        assertEquals(StatusEnvioLembrete.ENVIADO, fixture.service.dispararManual(10L).getStatus());
+    }
+
+    @Test
+    void jobNaoLancaExcecaoQuandoEntregaFalha() {
+        Fixture fixture = new Fixture((destino, assunto, texto, chave) -> {
+            throw EmailDeliveryException.tempoEsgotado(null);
+        });
+        var resposta = assertDoesNotThrow(() -> fixture.service.disparar(10L));
+        assertEquals(StatusEnvioLembrete.FALHOU, resposta.getStatus());
+    }
+
+    @Test
+    void falhaDeIaComEntregaOkNaoViraErro() {
+        Fixture fixture = new Fixture((destino, assunto, texto, chave) -> { });
+        when(fixture.generator.gerar(any())).thenReturn(new LembreteGeneratorService.ResultadoLembrete(
+                null, "Texto do template", true));
+        var resposta = fixture.service.dispararManual(10L);
+        assertEquals(StatusEnvioLembrete.ENVIADO, resposta.getStatus());
+        assertTrue(resposta.isUsouFallback());
     }
 
     @Test

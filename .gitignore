@@ -1,3 +1,6 @@
-deploy/.env.prod
+# Credenciais e configurações locais de ambiente
 .env
+.env.*
+!.env.example
 .specs
+deploy/.env.prod

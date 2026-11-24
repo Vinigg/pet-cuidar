@@ -14,7 +14,9 @@ que foi descrito na Secao 4 do documento de arquitetura.
      |
      v  (chamadas REST via HTTPS)
 [ Elastic Beanstalk / EC2 ]  <-- back-end Spring Boot (JAR)
-     |
+     |                               |
+     |                               v  (HTTP, risco de no-show)
+     |                       [ Microservico FastAPI ]  <-- predicao (Python)
      v
 [ arquivo petcuidar.db no volume da instancia ]
 ```
@@ -31,8 +33,7 @@ que foi descrito na Secao 4 do documento de arquitetura.
    estatico habilitada, e enviar o conteudo de `build/`.
 3. Criar uma distribuicao CloudFront apontando para o bucket, para HTTPS e
    cache do conteudo estatico.
-4. Definir `REACT_APP_API_URL` (no `.env` usado durante o `npm run build`)
-   apontando para a URL publica do back-end (passo seguinte).
+4. Defina `REACT_APP_API_URL=/api` antes do build. Configure o encaminhamento dessa rota conforme a seção de autenticação.
 
 ## Back-end (Spring Boot) — Elastic Beanstalk
 
@@ -61,6 +62,125 @@ do free tier), instalar o Java 17 e rodar o JAR diretamente com
 HTTPS (Let's Encrypt) ou de um Application Load Balancer com certificado do
 ACM.
 
+## Autenticação por e-mail
+
+Defina as variáveis abaixo no back-end antes de iniciar o aplicativo.
+
+| Variável | Valor |
+| --- | --- |
+| `AUTH_ADMIN_EMAIL` | E-mail do primeiro Admin. Deve ser um endereço válido e livre. |
+| `AUTH_SECURE_COOKIE` | `true` em HTTPS. Use `false` para desenvolvimento local por HTTP. |
+| `EMAIL_PROVIDER` | `resend` para entrega de códigos e lembretes. |
+| `RESEND_API_KEY` | Chave do ambiente Resend, armazenada como segredo. |
+| `EMAIL_FROM` | Remetente habilitado no Resend. |
+| `APP_CORS_ALLOWED_ORIGIN` | Origem HTTPS exata onde o React é servido. |
+
+O Flyway cria as tabelas de autenticação e vincula tutores existentes com endereços inequívocos. O Admin cadastra colaboradores e associa endereços de veterinários pela tela **Contas da equipe**.
+
+Para publicar o front e a API na mesma origem, crie um comportamento `/api/*` no CloudFront com o back-end como origem HTTPS. Permita os métodos da API e use **CachingDisabled**. Configure a política de requisição à origem para encaminhar os cookies da sessão, os cabeçalhos da aplicação e os parâmetros de consulta. [Políticas de requisição à origem no CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/origin-request-understand-origin-request-policy.html). Uma CloudFront Function associada ao evento de requisição do visitante pode retirar o prefixo encaminhado ao origin.
+
+```javascript
+function handler(event) {
+    var request = event.request;
+    request.uri = request.uri.slice(4);
+    request.headers['x-pet-cuidar-client-ip'] = { value: event.viewer.ip };
+    return request;
+}
+```
+
+Configure `SERVER_FORWARD_HEADERS_STRATEGY=native` e defina `AUTH_TRUSTED_PROXIES` com a expressão regular dos endereços dos proxies imediatos autorizados a conectar ao Tomcat. Restrinja a origem à cadeia de proxies que grava `X-Pet-Cuidar-Client-IP`. Para Nginx diretamente exposto ao navegador, sobrescreva esse cabeçalho com `proxy_set_header X-Pet-Cuidar-Client-IP $remote_addr;`. O acesso direto em desenvolvimento mantém a configuração padrão. [IP do visitante em CloudFront Functions](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-event-structure.html). [Configuração de proxy do Spring Boot](https://docs.spring.io/spring-boot/docs/3.2.7/reference/html/howto.html).
+
+Confirme que `/api/auth/sessao` responde `401` sem cookie e que a solicitação de código e a validação chegam ao back-end. Mantenha cookies, corpo da requisição e códigos fora dos logs do proxy.
+
+## Microserviço de predição de no-show (Python / FastAPI)
+
+O cálculo do risco de falta roda num serviço Python separado, em
+`microservico-predicao/`. O back-end Spring Boot o consome por HTTP e, em caso
+de falha, timeout ou resposta inválida, usa o fallback "score indisponível"
+(`categoria: INDISPONIVEL`), ou seja, o agendamento continua funcionando mesmo
+se este serviço estiver fora.
+
+O modelo treinado (`model/modelo_noshow.joblib`) já vai versionado no
+repositório, então **não é necessário treinar no deploy**. Se o arquivo não
+estiver presente, o serviço **não sobe** e registra o motivo no log.
+
+O microserviço **não deve ficar público**: ele não tem autenticação e só o
+back-end precisa chamá-lo. Mantenha a porta 8000 fechada para a internet.
+
+### Deploy recomendado — EC2 única com Docker Compose (back-end + predição)
+
+Como o banco é SQLite em arquivo, o back-end já precisa rodar em **uma única
+instância**. Colocar o microserviço na mesma instância é o caminho mais simples
+e mais seguro: a comunicação fica na rede interna do Docker e nada além do
+back-end é exposto. O `docker-compose.yml` na raiz do repositório já faz isso.
+
+1. Criar uma EC2 (ex.: t3.small; a t3.micro fica justa para JVM + Python) com
+   Amazon Linux 2023 e instalar Docker e o plugin Compose.
+2. Security group: liberar **22** (só para o IP do time) e **80/443** (ou 8080,
+   se ficar sem proxy). **Não** liberar a 8000.
+3. Clonar o repositório na instância e criar um `.env` na raiz (não commitar):
+   ```bash
+   APP_CORS_ALLOWED_ORIGIN=https://<dominio-do-cloudfront>
+   # opcionais (simuladores por padrao):
+   # LLM_PROVIDER=openai
+   # IA_OPENAI_API_KEY=...
+   # IA_OPENAI_MODEL=gpt-4o-mini
+   # IA_OPENAI_BASE_URL=https://api.openai.com/v1
+   # ou, para usar o provedor llm-externo:
+   # LLM_PROVIDER=llm-externo
+   # LLM_API_KEY=...
+   # EMAIL_PROVIDER=resend
+   # RESEND_API_KEY=...
+   # EMAIL_FROM=...
+   # LEMBRETE_JOB_ENABLED=true
+   ```
+4. Subir:
+   ```bash
+   docker compose up -d --build
+   docker compose ps          # predicao deve aparecer como "healthy"
+   ```
+5. HTTPS: colocar um Nginx com Let's Encrypt (ou um ALB com certificado do ACM)
+   na frente da porta 8080 do back-end. O front no CloudFront é HTTPS, então o
+   navegador bloqueia chamadas para um back-end só em HTTP.
+6. No build do front, use `REACT_APP_API_URL=/api`. Configure a rota de API no CloudFront conforme a seção de autenticação.
+
+O back-end encontra o microserviço por `NOSHOW_PREDICTOR_BASE_URL=http://predicao:8000`,
+que o compose já define. O banco fica no volume `petcuidar-data` (`/data/petcuidar.db`
+dentro do container): é esse arquivo que entra na rotina de backup.
+
+O backend inicia independentemente da saúde da predição. Se o modelo não
+carregar ou o serviço estiver fora, as consultas continuam disponíveis e o
+risco aparece como **Indisponível**. O health check da predição continua ativo
+para diagnóstico. Para subir somente o backend, use `docker compose up -d backend`.
+Após recuperar a predição, aguarde a janela do circuit breaker antes de
+verificar os scores novamente (30 segundos por padrão).
+
+### Alternativas
+
+- **Container gerenciado (App Runner ou ECS/Fargate):** o `Dockerfile` do
+  microserviço funciona como está (porta 8000, health check em `/health`).
+  Nesse caso o serviço precisa ficar em rede privada (VPC, sem URL pública),
+  acessível só pelo back-end, e `NOSHOW_PREDICTOR_BASE_URL` aponta para o
+  endereço interno.
+- **Sem Docker, na mesma EC2 do back-end:** instalar Python 3.12, rodar
+  `pip install -r requirements.txt` em `microservico-predicao/` e subir
+  `uvicorn app.main:app --host 127.0.0.1 --port 8000` como serviço `systemd`.
+  Escutando em `127.0.0.1`, a porta não fica exposta; o back-end usa o default
+  `http://localhost:8000` e não precisa de configuração.
+
+### Verificação rápida
+
+- Na instância: `docker compose ps` deve mostrar o `predicao` como **healthy**
+  (o health check do container chama `/health`). Na alternativa sem Docker,
+  `curl -s http://localhost:8000/health` deve responder
+  `{"status":"ok","modelo_carregado":true}`.
+- Se o container `predicao` reiniciar em loop, veja `docker compose logs predicao`:
+  a mensagem "Modelo de no-show nao encontrado" indica que o `.joblib` não foi
+  copiado para a imagem.
+- Pelo navegador: no painel da recepção, consultas agendadas devem mostrar
+  "Baixo/Médio/Alto (xx%)". "Indisponível" em todas indica que o back-end não
+  está alcançando o microserviço.
+
 ## Banco de dados (SQLite) — limitacao importante
 
 O grupo optou por **SQLite** como banco principal. Isso funciona bem para o
@@ -87,12 +207,18 @@ nem commitadas no Git. Armazene-as no **AWS Systems Manager Parameter Store**
 (ou **Secrets Manager**) e injete-as como variaveis de ambiente no Elastic
 Beanstalk/EC2.
 
-- **OpenAI:** `IA_PROVIDER=openai`, com `LLM_API_KEY`, `LLM_MODEL` e
-   `LLM_BASE_URL`.
-- **Anthropic:** `LLM_PROVIDER=anthropic`, com `LLM_API_KEY` e, se necessario,
-   `LLM_MODEL` e `LLM_BASE_URL`. A ativacao deve aguardar o ajuste da selecao de
-   clientes IA: na configuracao atual, o simulador e o cliente Anthropic podem
-   ser registrados simultaneamente.
+- **Provedor de IA:** `LLM_PROVIDER` = `simulador` (padrao), `openai` ou
+   `llm-externo`. Exatamente um cliente e registrado; valor invalido impede a
+   inicializacao. Cada provedor tem as proprias variaveis, sem compartilhamento:
+   - `openai`: `IA_OPENAI_API_KEY` e, se necessario, `IA_OPENAI_MODEL` e
+     `IA_OPENAI_BASE_URL`.
+   - `llm-externo`: `LLM_API_KEY` e, se necessario, `LLM_MODEL`,
+     `LLM_BASE_URL`, `LLM_EFFORT` e `LLM_MAX_TOKENS`.
+   - Exemplo: `LLM_PROVIDER=llm-externo` e `LLM_API_KEY=<sua-chave>`.
+   - **Migracao:** quem usava `IA_PROVIDER=openai` com `LLM_API_KEY`,
+     `LLM_MODEL` e `LLM_BASE_URL` deve passar a chave, o modelo e o endpoint
+     para `IA_OPENAI_API_KEY`, `IA_OPENAI_MODEL` e `IA_OPENAI_BASE_URL`.
+     `IA_PROVIDER` continua aceito quando `LLM_PROVIDER` nao esta definido.
 - **Resend:** `EMAIL_PROVIDER=resend`, `RESEND_API_KEY` e `EMAIL_FROM`.
 - **Preditor de no-show:** `NOSHOW_PREDICTOR_BASE_URL`, apontando para o
    servico FastAPI publicado.
