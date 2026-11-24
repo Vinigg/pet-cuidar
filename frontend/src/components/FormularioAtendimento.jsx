@@ -15,7 +15,15 @@ import { dataLocal } from '../utils/datas';
 const mensagemDaApi = (err, padrao) =>
   err.response?.data?.mensagem || err.response?.data?.message || padrao;
 
-export default function FormularioAtendimento() {
+const statusConsulta = {
+  AGENDADA: 'Agendada',
+  CONFIRMADA: 'Confirmada',
+  REALIZADA: 'Realizada',
+  CANCELADA: 'Cancelada',
+  NAO_COMPARECEU: 'Não compareceu'
+};
+
+export default function FormularioAtendimento({ conta }) {
   // Estados para seleção
   const [pets, setPets] = useState([]);
   const [veterinarios, setVeterinarios] = useState([]);
@@ -41,11 +49,9 @@ export default function FormularioAtendimento() {
   const [erro, setErro] = useState(null);
   const [errosValidacao, setErrosValidacao] = useState({});
 
-  const consultasDisponiveis = petSelecionado && veterinarioSelecionado
-    ? consultas.filter(c =>
-        String(c.petId) === String(petSelecionado) &&
-        String(c.veterinarioId) === String(veterinarioSelecionado))
-    : [];
+  const veterinarioId = conta?.veterinarioId;
+  const consultasDisponiveis = consultas.filter((consulta) => consulta.veterinarioId === veterinarioId);
+  const consultaEscolhida = consultasDisponiveis.find((consulta) => String(consulta.id) === consultaSelecionada);
 
   // Carregar opções iniciais (pets e veterinários)
   useEffect(() => {
@@ -150,15 +156,15 @@ export default function FormularioAtendimento() {
   const validar = () => {
     const erros = {};
 
-    if (!petSelecionado) {
+    if (modo === 'atualizar' && !petSelecionado) {
       erros.petSelecionado = 'Selecione um pet';
     }
 
-    if (!veterinarioSelecionado) {
+    if (modo === 'atualizar' && !veterinarioSelecionado) {
       erros.veterinarioSelecionado = 'Selecione um veterinário';
     }
 
-    if (modo === 'registrar' && !consultaSelecionada) {
+    if (modo === 'registrar' && !consultaEscolhida) {
       erros.consultaSelecionada = 'Selecione uma consulta';
     }
 
@@ -189,9 +195,9 @@ export default function FormularioAtendimento() {
     setLoading(true);
     try {
       const dados = {
-        petId: parseInt(petSelecionado),
-        consultaId: parseInt(consultaSelecionada),
-        veterinarioId: parseInt(veterinarioSelecionado),
+        petId: consultaEscolhida.petId,
+        consultaId: consultaEscolhida.id,
+        veterinarioId,
         descricaoClinica: descricaoClinica.trim()
       };
 
@@ -208,12 +214,6 @@ export default function FormularioAtendimento() {
       setErroAgenda('');
       setCarregandoConsultas(true);
       setRevisaoAgenda((valor) => valor + 1);
-
-      // Recarregar atendimentos
-      if (petSelecionado) {
-        const response = await listarAtendimentosPorPet(petSelecionado);
-        setAtendimentosExistentes(Array.isArray(response.data) ? response.data : []);
-      }
 
       // Ocultar mensagem após 4 segundos
       setTimeout(() => setMensagemSucesso(null), 4000);
@@ -349,6 +349,7 @@ export default function FormularioAtendimento() {
           </div>
           {carregandoConsultas && <p role="status">Carregando consultas…</p>}
           {erroAgenda && <div className="alert alert-error" role="alert">{erroAgenda}</div>}
+          {modo === 'atualizar' && <>
           {/* Seção 1: Seleção de Pet */}
           <div className="form-section">
             <h2 className="form-section-title">1. Paciente</h2>
@@ -418,11 +419,11 @@ export default function FormularioAtendimento() {
             </div>
           </div>
 
-          {/* Seção 3: Seleção de Consulta (apenas para registrar) */}
+          </>}
+
+          {/* Seleção de Consulta (apenas para registrar) */}
           {modo === 'registrar' && (
             <div className="form-section">
-              <h2 className="form-section-title">3. Consulta</h2>
-              
               <div className="form-group">
                 <label className="input-label" htmlFor="consulta">
                   Consulta *
@@ -434,6 +435,7 @@ export default function FormularioAtendimento() {
                   disabled={!dataSelecionada || carregandoConsultas || Boolean(erroAgenda) || consultasDisponiveis.length === 0 || loading}
                   onChange={(e) => {
                     setConsultaSelecionada(e.target.value);
+                    setDescricaoClinica('');
                     if (errosValidacao.consultaSelecionada) {
                       setErrosValidacao({ ...errosValidacao, consultaSelecionada: '' });
                     }
@@ -446,7 +448,7 @@ export default function FormularioAtendimento() {
                   </option>
                   {consultasDisponiveis.map(consulta => (
                     <option key={consulta.id} value={consulta.id}>
-                      {consulta.petNome} - {new Date(consulta.dataHora).toLocaleString('pt-BR')} ({consulta.status})
+                      {consulta.dataHora.slice(11, 16)} · {consulta.petNome} · {statusConsulta[consulta.status] || consulta.status}
                     </option>
                   ))}
                 </select>
@@ -503,7 +505,7 @@ export default function FormularioAtendimento() {
           {/* Seção 5: Descrição Clínica */}
           <div className="form-section">
             <h2 className="form-section-title">
-              {modo === 'registrar' ? '4. Descrição Clínica' : '4. Atualizar Descrição'}
+              {modo === 'registrar' ? 'Descrição Clínica' : 'Atualizar Descrição'}
             </h2>
             
             <div className="form-group">

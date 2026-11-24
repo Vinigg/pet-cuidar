@@ -40,9 +40,7 @@ const selecionar = async (seletor, valor) => {
 };
 
 const preencherERegistrar = async () => {
-  await act(async () => root.render(<FormularioAtendimento />));
-  await selecionar("#pet", "1");
-  await selecionar("#veterinario", "3");
+  await act(async () => root.render(<FormularioAtendimento conta={{ veterinarioId: 3 }} />));
   await selecionar("#consulta", "2");
   await selecionar("textarea", "Otite leve, tratamento topico.");
   await act(async () => Simulate.submit(container.querySelector("form")));
@@ -80,12 +78,7 @@ test("registro com sucesso recarrega as consultas para mostrar o novo status", a
 });
 
 const abrirFormulario = async () => {
-  await act(async () => root.render(<FormularioAtendimento />));
-};
-
-const selecionarContextoRegistravel = async () => {
-  await selecionar("#pet", "1");
-  await selecionar("#veterinario", "3");
+  await act(async () => root.render(<FormularioAtendimento conta={{ veterinarioId: 3 }} />));
 };
 
 const valoresDasOpcoes = (seletor) =>
@@ -112,7 +105,6 @@ test("C1 abre com a data local de hoje", async () => {
 test("C2 impede selecionar uma data futura", async () => {
   listarConsultasDoDia.mockResolvedValue({ data: [consultaNaData(2, "2026-11-24")] });
   await abrirFormulario();
-  await selecionarContextoRegistravel();
 
   const campoData = container.querySelector("#data-consulta");
   expect(campoData.max).toBe("2026-11-24");
@@ -126,7 +118,6 @@ test("C4 trocar o dia limpa a consulta e a descrição", async () => {
   listarConsultasDoDia.mockResolvedValueOnce({ data: [consultaNaData(2, "2026-11-24")] })
     .mockResolvedValueOnce({ data: [consultaNaData(7, "2026-11-23")] });
   await abrirFormulario();
-  await selecionarContextoRegistravel();
   await selecionar("#consulta", "2");
   await selecionar("textarea", "Descrição digitada para a primeira consulta.");
   expect(container.querySelector("#consulta").value).toBe("2");
@@ -141,7 +132,6 @@ test("C4 trocar o dia limpa a consulta e a descrição", async () => {
 test("C12 informa quando a data não tem consultas", async () => {
   listarConsultasDoDia.mockResolvedValue({ data: [] });
   await abrirFormulario();
-  await selecionarContextoRegistravel();
   await selecionar("#data-consulta", "2026-11-23");
 
   expect(container.textContent).toContain("Nenhuma consulta na data selecionada.");
@@ -152,7 +142,6 @@ test("C13 avisa da falha e retira as opções anteriores", async () => {
   listarConsultasDoDia.mockResolvedValueOnce({ data: [consultaNaData(2, "2026-11-24")] })
     .mockRejectedValueOnce(new Error("Sem rede"));
   await abrirFormulario();
-  await selecionarContextoRegistravel();
   expect(valoresDasOpcoes("#consulta")).toEqual(["2"]);
 
   await selecionar("#data-consulta", "2026-11-23");
@@ -168,7 +157,6 @@ test("uma agenda anterior não é restaurada por resposta atrasada", async () =>
   listarConsultasDoDia.mockImplementationOnce(() => agendaAnterior.promessa)
     .mockResolvedValueOnce({ data: [consultaNaData(7, "2026-11-23")] });
   await abrirFormulario();
-  await selecionarContextoRegistravel();
   await selecionar("#data-consulta", "2026-11-23");
 
   await act(async () => agendaAnterior.resolver({ data: [consultaNaData(2, "2026-11-24")] }));
@@ -180,7 +168,6 @@ test("C16 indica carregamento e desabilita a seleção de consultas", async () =
   const agenda = aguardarResposta();
   listarConsultasDoDia.mockImplementationOnce(() => agenda.promessa);
   await abrirFormulario();
-  await selecionarContextoRegistravel();
 
   expect(container.querySelector('[role="status"]').textContent).toContain("Carregando consultas");
   expect(container.querySelector("#consulta").disabled).toBe(true);
@@ -188,4 +175,42 @@ test("C16 indica carregamento e desabilita a seleção de consultas", async () =
   await act(async () => agenda.resolver({ data: [consultaNaData(2, "2026-11-24")] }));
   expect(container.querySelector('[role="status"]')).toBeNull();
   expect(container.querySelector("#consulta").disabled).toBe(false);
+});
+
+test("C3 mostra consultas da data do veterinário em ordem de horário", async () => {
+  listarConsultasDoDia.mockImplementation(async (data) => ({
+    data: data === "2026-11-23" ? [
+      consultaNaData(6, data, { dataHora: data + "T08:30:00", status: "CONFIRMADA" }),
+      consultaNaData(8, data, { veterinarioId: 4, petNome: "Luna" }),
+      consultaNaData(7, data, { petId: 5, petNome: "Mel", dataHora: data + "T11:00:00" }),
+    ] : [consultaNaData(2, data)],
+  }));
+  await abrirFormulario();
+  await selecionar("#data-consulta", "2026-11-23");
+
+  const opcoes = Array.from(container.querySelector("#consulta").options).slice(1);
+  expect(opcoes.map((opcao) => opcao.value)).toEqual(["6", "7"]);
+  expect(opcoes[0].textContent).toMatch(/08:30.*Rex.*Confirmada/);
+  expect(opcoes[1].textContent).toMatch(/11:00.*Mel.*Agendada/);
+  expect(container.querySelector("#pet")).toBeNull();
+  expect(container.querySelector("#veterinario")).toBeNull();
+});
+
+test("C5 registra uma consulta passada com os vínculos da seleção", async () => {
+  listarConsultasDoDia.mockImplementation(async (data) => ({
+    data: data === "2026-11-23" ? [consultaNaData(7, data, { petId: 5 })] : [],
+  }));
+  registrarAtendimento.mockResolvedValue({ data: { id: 9 } });
+  await abrirFormulario();
+  await selecionar("#data-consulta", "2026-11-23");
+  await selecionar("#consulta", "7");
+  await selecionar("textarea", "Paciente tratado para otite.");
+
+  await act(async () => Simulate.submit(container.querySelector("form")));
+
+  expect(registrarAtendimento).toHaveBeenCalledWith({
+    petId: 5, consultaId: 7, veterinarioId: 3, descricaoClinica: "Paciente tratado para otite.",
+  });
+  expect(container.textContent).toContain("Atendimento registrado com sucesso!");
+  expect(listarConsultasDoDia).toHaveBeenLastCalledWith("2026-11-23");
 });
