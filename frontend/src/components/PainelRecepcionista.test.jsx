@@ -1,7 +1,8 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import PainelRecepcionista from "./PainelRecepcionista";
-import { listarConsultasDoDia, obterPredicaoNoShow } from "../api/api";
+import { api, listarConsultasDoDia, obterPredicaoNoShow } from "../api/api";
+import { Simulate } from "react-dom/test-utils";
 
 jest.mock("../api/api", () => ({
   api: { patch: jest.fn() },
@@ -83,5 +84,56 @@ test("nao pede score para consultas que ja terminaram", async () => {
   await act(async () => { root.render(<PainelRecepcionista />); });
   await flush();
 
+  expect(obterPredicaoNoShow).not.toHaveBeenCalled();
+});
+
+test("agenda vazia e falha de rede nao exibem pacientes simulados", async () => {
+  listarConsultasDoDia.mockResolvedValueOnce({ data: [] });
+  await act(async () => { root.render(<PainelRecepcionista />); });
+  await flush();
+  expect(container.querySelectorAll("tbody tr")).toHaveLength(0);
+  expect(container.textContent).toContain("Nenhuma consulta encontrada");
+  listarConsultasDoDia.mockRejectedValueOnce(new Error("Offline"));
+  const sincronizar = [...container.querySelectorAll("button")].find(b => b.textContent.includes("Sincronizar"));
+  await act(async () => sincronizar.click());
+  await flush();
+  expect(container.querySelector('[role="alert"]').textContent).toContain("Não foi possível carregar");
+  expect(container.textContent).not.toContain("Thor");
+  expect(container.querySelectorAll("tbody tr")).toHaveLength(0);
+});
+
+test("mudanca de status rejeitada permanece no modal sem alterar consulta localmente", async () => {
+  listarConsultasDoDia.mockResolvedValue({ data: [consulta(1, "Rex")] });
+  obterPredicaoNoShow.mockResolvedValue({ data: { score: null, categoria: "INDISPONIVEL" } });
+  api.patch.mockRejectedValue({ response: { data: { mensagem: "Transicao nao permitida." } } });
+  await act(async () => { root.render(<PainelRecepcionista />); });
+  await flush();
+  await act(async () => [...container.querySelectorAll("button")].find(b => b.textContent === "Atualizar").click());
+  expect(container.querySelector('input[value="EM_ATENDIMENTO"]')).toBeNull();
+  const cancelada = container.querySelector('input[value="CANCELADA"]');
+  await act(async () => Simulate.change(cancelada));
+  await act(async () => [...container.querySelectorAll("button")].find(b => b.textContent === "Salvar alteração").click());
+  expect(api.patch).toHaveBeenCalledWith("/consultas/1/status", { status: "CANCELADA" });
+  expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  expect(container.querySelector('[role="alert"]').textContent).toContain("Transicao nao permitida.");
+  expect(linhaDo("Rex").textContent).toContain("Agendada");
+  expect(listarConsultasDoDia).toHaveBeenCalledTimes(1);
+});
+
+test("resposta de agenda anterior nao substitui a data selecionada", async () => {
+  let responderAnterior;
+  listarConsultasDoDia.mockImplementationOnce(() => new Promise(resolve => { responderAnterior = resolve; }));
+  listarConsultasDoDia.mockResolvedValueOnce({ data: [consulta(2, "Data nova", "REALIZADA")] });
+  await act(async () => { root.render(<PainelRecepcionista />); });
+  const data = container.querySelector('input[type="date"]');
+  await act(async () => {
+    data.value = "2026-12-01";
+    Simulate.change(data);
+  });
+  await flush();
+  await act(async () => responderAnterior({ data: [consulta(1, "Data antiga")] }));
+  await flush();
+  expect(container.textContent).toContain("Data nova");
+  expect(container.textContent).not.toContain("Data antiga");
   expect(obterPredicaoNoShow).not.toHaveBeenCalled();
 });

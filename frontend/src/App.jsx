@@ -13,6 +13,9 @@ import FormularioAtendimento from './components/FormularioAtendimento';
 import Veterinarios from './components/Veterinarios';
 import MinhaAgenda from './components/MinhaAgenda';
 import Equipe from './components/Equipe';
+import AgendaSemanal from './components/AgendaSemanal';
+import GestaoTutoresPets from './components/GestaoTutoresPets';
+import LembretesRecepcao from './components/LembretesRecepcao';
 import { Button } from './components/common/UIComponents';
 
 const paineis = {
@@ -29,6 +32,9 @@ const paineis = {
         prefixo: 'colaborador', nome: 'Colaborador', inicio: 'painel',
         abas: [
             { id: 'painel', label: 'Painel do dia', Tela: PainelRecepcionista },
+            { id: 'agenda-semanal', label: 'Agenda', Tela: AgendaSemanal },
+            { id: 'tutores-pets', label: 'Tutores e pets', Tela: GestaoTutoresPets },
+            { id: 'lembretes', label: 'Lembretes', Tela: LembretesRecepcao },
             { id: 'agendamento', label: 'Agendar consulta', Tela: AgendamentoForm },
             { id: 'cadastro', label: 'Cadastro', Tela: CadastroTutorPet }
         ]
@@ -168,7 +174,10 @@ export default function App() {
                         <Button onClick={() => navegar(inicio)}>Voltar ao meu painel</Button>
                     </section>
                 ) : tutor ? <PainelTutor conta={conta} aba={aba} consultaId={id} navegar={irPara} />
-                    : <Tela />}
+                    : <Tela conta={conta} onNovoAgendamento={() => irPara('agendamento')}
+                        onNovaConsulta={() => irPara('agendamento')} onNovoTutor={() => irPara('cadastro')}
+                        onCadastroSucesso={() => irPara('tutores-pets')}
+                        onRegistrarAtendimento={() => irPara('atendimentos')} />}
             </main>
         </div>
     );

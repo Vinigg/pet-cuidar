@@ -93,7 +93,7 @@ test('C4 recarregar restaura o perfil a partir do servidor', async () => {
 test.each([
     ['C5 Tutor vê somente sua navegação', 'TUTOR', ['Início', 'Meus pets', 'Consultas'], 'Olá, Ana!'],
     ['C6 Veterinário vê somente sua navegação', 'VETERINARIO', ['Minha agenda', 'Histórico do pet', 'Registrar atendimento'], 'Histórico veterinário'],
-    ['C7 Colaborador vê somente sua navegação', 'COLABORADOR', ['Painel do dia', 'Agendar consulta', 'Cadastro'], 'Agenda da recepção'],
+    ['C7 Colaborador vê somente sua navegação', 'COLABORADOR', ['Painel do dia', 'Agenda', 'Tutores e pets', 'Lembretes', 'Agendar consulta', 'Cadastro'], 'Agenda da recepção'],
     ['C8 Admin vê somente a gestão de equipe', 'ADMIN', ['Veterinários', 'Contas da equipe'], 'Gestão de veterinários']
 ])('%s', async (_, perfil, esperado, titulo) => {
     await abrir(perfil);

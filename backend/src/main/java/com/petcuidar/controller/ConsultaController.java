@@ -84,4 +84,9 @@ public class ConsultaController {
     public LembreteResponseDTO dispararLembrete(@PathVariable Long id) {
         return consultaService.dispararLembrete(id);
     }
+
+    @GetMapping("/{id}/lembrete")
+    public EstadoLembreteDTO estadoLembrete(@PathVariable Long id) {
+        return consultaService.obterEstadoLembrete(id);
+    }
 }

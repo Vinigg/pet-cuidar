@@ -26,4 +26,9 @@ public class TutorController {
     public TutorResponseDTO cadastrar(@Valid @RequestBody TutorCadastroDTO dto) {
         return tutorService.cadastrarPeloColaborador(dto);
     }
+
+    @GetMapping
+    public java.util.List<TutorResponseDTO> listar() {
+        return tutorService.listarCadastros();
+    }
 }

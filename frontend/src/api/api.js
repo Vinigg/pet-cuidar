@@ -22,6 +22,7 @@ export const vincularVeterinario = (id, email) => api.put(`/equipe/veterinarios/
 export const listarMeusPets = () => api.get("/pets/meus");
 export const cadastrarMeuPet = (dados) => api.post("/pets", dados);
 export const cadastrarTutor = (dados) => api.post("/tutores", dados);
+export const listarTutores = () => api.get("/tutores");
 export const listarPets = (tutorId) => api.get("/pets", { params: { tutorId } });
 
 // ---- Veterinarios ----
@@ -43,6 +44,7 @@ export const criarConsulta = (dados) => api.post("/consultas", dados);
 export const listarConsultasDoDia = (data) => api.get("/consultas", { params: { data } });
 export const obterPredicaoNoShow = (consultaId) => api.get(`/consultas/${consultaId}/predicao-no-show`);
 export const dispararLembrete = (consultaId) => api.post(`/consultas/${consultaId}/lembrete`);
+export const obterEstadoLembrete = (consultaId) => api.get(`/consultas/${consultaId}/lembrete`);
 
 // ---- Historico / Pets ----
 export const obterHistoricoPet = (petId) => api.get(`/pets/${petId}/historico`);

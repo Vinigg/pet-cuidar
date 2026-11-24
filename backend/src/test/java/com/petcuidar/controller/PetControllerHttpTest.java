@@ -28,12 +28,13 @@ class PetControllerHttpTest {
     @MockBean HistoricoAtendimentoService historicoService;
 
     @Test void listaOpcoesSemExporDadosSensiveis() throws Exception {
-        when(petService.listarOpcoes(null)).thenReturn(List.of(new PetOpcaoDTO(1L, "Luna", "Gato", "Ana")));
+        when(petService.listarOpcoes(null)).thenReturn(List.of(new PetOpcaoDTO(1L, "Luna", "Gato", 7L, "Ana")));
         mvc.perform(get("/pets"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(1))
                 .andExpect(jsonPath("$[0].nome").value("Luna"))
                 .andExpect(jsonPath("$[0].tutorNome").value("Ana"))
+                .andExpect(jsonPath("$[0].tutorId").value(7))
                 .andExpect(jsonPath("$[0].cpf").doesNotExist())
                 .andExpect(jsonPath("$[0].tutor").doesNotExist())
                 .andExpect(jsonPath("$[0].alergiasCriticas").doesNotExist());

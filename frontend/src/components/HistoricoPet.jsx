@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Badge, Button } from './common/UIComponents';
 import { listarPets, obterHistoricoPet, obterResumoHistoricoPet } from '../api/api';
+import RegistroNoProntuario from './RegistroNoProntuario';
+import SelecaoTutorPet from './SelecaoTutorPet';
 
 const STATUS_LABEL = {
   AGENDADA: { label: 'Agendada', variant: 'warning' },
@@ -38,9 +40,14 @@ function RegistroClinico({ atendimento }) {
   );
 }
 
-export default function HistoricoPet() {
+export default function HistoricoPet({ onRegistrarAtendimento, conta }) {
   const [pets, setPets] = useState([]);
   const [petId, setPetId] = useState('');
+  const [tutorId, setTutorId] = useState('');
+  const [carregandoPets, setCarregandoPets] = useState(true);
+  const [erroPets, setErroPets] = useState('');
+  const [atualizacao, setAtualizacao] = useState(0);
+  const [avisoSalvo, setAvisoSalvo] = useState('');
 
   const [historico, setHistorico] = useState(null);
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
@@ -54,9 +61,12 @@ export default function HistoricoPet() {
   const historicoRef = useRef(null);
 
   useEffect(() => {
+    let ativo = true;
     listarPets()
-      .then((res) => setPets(Array.isArray(res.data) ? res.data : []))
-      .catch((err) => console.error('Erro ao listar pets:', err));
+      .then((res) => { if (ativo) setPets(Array.isArray(res.data) ? res.data : []); })
+      .catch(() => { if (ativo) setErroPets('Não foi possível carregar os pacientes.'); })
+      .finally(() => { if (ativo) setCarregandoPets(false); });
+    return () => { ativo = false; };
   }, []);
 
   // Histórico (dados reais) e resumo (IA) são carregados de forma independente:
@@ -67,7 +77,11 @@ export default function HistoricoPet() {
     setErroHistorico(null);
     setErroResumo(false);
     setFiltroStatus('');
-    if (!petId) return;
+    if (!petId) {
+      setCarregandoHistorico(false);
+      setCarregandoResumo(false);
+      return;
+    }
 
     let cancelado = false;
 
@@ -90,7 +104,7 @@ export default function HistoricoPet() {
       .finally(() => { if (!cancelado) setCarregandoResumo(false); });
 
     return () => { cancelado = true; };
-  }, [petId]);
+  }, [petId, atualizacao]);
 
   const irParaHistorico = () => {
     historicoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -109,59 +123,52 @@ export default function HistoricoPet() {
   );
 
   return (
-    <div className="history-container">
-      <div className="history-card">
+    <div className="clinica-container">
+      <div className="clinical-history">
         <header className="history-header">
           <div>
-            <Badge variant="primary">Prontuário Veterinário</Badge>
+            <span className="clinic-eyebrow">PRONTUÁRIO CLÍNICO UNIFICADO</span>
             <h1 className="form-title" style={{ marginTop: '8px' }}>Histórico do Pet</h1>
             <p className="form-subtitle">
               Consulte o resumo clínico e o histórico completo de consultas e atendimentos.
             </p>
           </div>
 
-          <div style={{ minWidth: '280px' }}>
-            <label className="input-label" htmlFor="historico-pet" style={{ marginBottom: '6px', display: 'block' }}>
-              PACIENTE
-            </label>
-            <select
-              id="historico-pet"
-              className="select-custom"
-              value={petId}
-              onChange={(e) => setPetId(e.target.value)}
-            >
-              <option value="">Selecione um pet...</option>
-              {pets.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nome} ({p.especie}) - Tutor: {p.tutorNome}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Button variant="outlined" size="sm" onClick={() => window.print()}>🖨️ Imprimir</Button>
         </header>
 
+        <SelecaoTutorPet pets={pets} tutorId={tutorId} petId={petId} prefixo="historico"
+          carregando={carregandoPets} onTutorChange={id => { setTutorId(id); setPetId(''); setAvisoSalvo(''); }}
+          onPetChange={id => { setPetId(id); setAvisoSalvo(''); }} />
+        {erroPets && <p className="alert-box error" role="alert">{erroPets}</p>}
+        {!carregandoPets && !erroPets && !pets.length && <p className="empty-state">Nenhum paciente vinculado às suas consultas.</p>}
+        {avisoSalvo && <p className="alert-box success" role="status">{avisoSalvo}</p>}
         {!petId ? (
-          <div className="empty-state">Selecione um pet para visualizar o histórico.</div>
+          <div className="empty-state">Selecione um tutor e um pet para visualizar o histórico.</div>
         ) : (
           <>
             {historico && (
-              <div className="historico-pet-info">
-                <strong>{historico.petNome}</strong>
-                {historico.especie && <span>{historico.especie}</span>}
-                {historico.idade != null && <span>{historico.idade} {historico.idade === 1 ? 'ano' : 'anos'}</span>}
-                {historico.tutorNome && <span>Tutor: {historico.tutorNome}</span>}
+              <div className="table-card clinical-patient-card">
+                <div className="pet-thumb-circle" aria-hidden="true">{historico.especie?.toLowerCase() === 'gato' ? '🐈' : '🐕'}</div>
+                <div>
+                  <h2>{historico.petNome}</h2>
+                  <p>{[historico.especie, historico.idade != null ? historico.idade + ' ano(s)' : null].filter(Boolean).join(' • ')}</p>
+                </div>
+                {historico.tutorNome && <strong>Tutor: {historico.tutorNome}</strong>}
               </div>
             )}
 
             {/* Itens críticos: dado do cadastro, nunca dependente da IA */}
             {historico?.itensCriticos && (
-              <div className="critical-allergy-alert">
+              <div className="alert-allergy-box critical-allergy-alert" role="note">
                 <span>⚠️ ITENS CRÍTICOS:</span>
                 <span>{historico.itensCriticos}</span>
                 <Badge variant="danger" className="historico-origem-badge">Dado do cadastro</Badge>
               </div>
             )}
 
+            <div className="recepcao-dashboard-grid">
+            <div>
             {/* Resumo gerado por IA */}
             <div className={`ai-summary-card ${erroResumo || resumo?.usouFallback ? 'fallback' : 'active'}`}>
               <div className="ai-summary-header">
@@ -203,7 +210,7 @@ export default function HistoricoPet() {
               {carregandoHistorico ? (
                 <div className="empty-state">Carregando histórico do paciente...</div>
               ) : erroHistorico ? (
-                <div className="alert alert-error">✗ {erroHistorico}</div>
+                <div className="alert-box error" role="alert">✗ {erroHistorico}</div>
               ) : historico && (
                 <>
                   <div className="historico-stats">
@@ -249,10 +256,9 @@ export default function HistoricoPet() {
                       Nenhuma consulta com o status selecionado.
                     </div>
                   ) : (
-                    <div className="timeline">
+                    <div className="vet-timeline-wrap">
                       {consultasFiltradas.map((consulta) => (
-                        <div key={consulta.consultaId} className="timeline-item">
-                          <span className="timeline-dot" />
+                        <div key={consulta.consultaId} className="timeline-item vet-card-entry">
                           <div className="historico-consulta-header">
                             <div className="timeline-date">{formatarDataHora(consulta.dataHora)}</div>
                             <StatusBadge status={consulta.status} />
@@ -275,10 +281,9 @@ export default function HistoricoPet() {
                   {semConsulta.length > 0 && (
                     <>
                       <h3 className="historico-subtitulo">Registros sem consulta vinculada</h3>
-                      <div className="timeline">
+                      <div className="vet-timeline-wrap">
                         {semConsulta.map((a) => (
-                          <div key={a.id} className="timeline-item">
-                            <span className="timeline-dot" />
+                          <div key={a.id} className="timeline-item vet-card-entry">
                             <div className="timeline-date">{formatarDataHora(a.dataAtendimento)}</div>
                             <RegistroClinico atendimento={a} />
                           </div>
@@ -289,6 +294,17 @@ export default function HistoricoPet() {
                 </>
               )}
             </section>
+            </div>
+            <aside className="table-card clinical-record-actions">
+              {conta?.veterinarioId && historico ? <RegistroNoProntuario key={petId}
+                petId={Number(petId)} petNome={historico.petNome} veterinarioId={conta.veterinarioId}
+                consultas={consultas} onSalvo={() => { setAvisoSalvo('Atendimento registrado no prontuário.'); setAtualizacao(a => a + 1); }} />
+                : <><h2 style={{ fontSize: '1.1rem' }}>Registrar atendimento</h2>
+                  <p>Selecione um paciente para registrar a evolução clínica.</p></>}
+              {onRegistrarAtendimento && <Button variant="outlined" onClick={onRegistrarAtendimento}>Abrir gestão de atendimentos →</Button>}
+              <p className="historico-aviso-ia">Os alertas críticos vêm do cadastro do paciente e permanecem visíveis quando a IA está indisponível.</p>
+            </aside>
+            </div>
           </>
         )}
       </div>

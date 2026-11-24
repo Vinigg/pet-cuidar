@@ -31,7 +31,7 @@ let root;
 beforeEach(() => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   jest.resetAllMocks();
-  listarPets.mockResolvedValue({ data: [{ id: 2, nome: "Bob", especie: "Pitbull", tutorNome: "João" }] });
+  listarPets.mockResolvedValue({ data: [{ id: 2, nome: "Bob", especie: "Pitbull", tutorId: 7, tutorNome: "João" }] });
   obterHistoricoPet.mockResolvedValue({ data: historicoBob });
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -44,8 +44,14 @@ afterEach(() => {
 
 async function renderizarESelecionarBob() {
   await act(async () => root.render(<HistoricoPet />));
+  const tutor = container.querySelector("#historico-tutor");
+  expect(container.querySelector("#historico-pet").disabled).toBe(true);
+  await act(async () => {
+    tutor.value = "7";
+    Simulate.change(tutor);
+  });
   const select = container.querySelector("#historico-pet");
-  expect(select.textContent).toContain("Bob (Pitbull) - Tutor: João");
+  expect(select.textContent).toContain("Bob (Pitbull) · pet #2");
   await act(async () => {
     select.value = "2";
     Simulate.change(select);
