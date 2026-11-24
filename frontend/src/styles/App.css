@@ -2934,6 +2934,200 @@ body {
   }
 }
 
+/* Apresentação do tutor e telas operacionais restauradas */
+.restored-sidebar,
+.restored-action-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.restored-home-pets {
+  margin-top: 28px;
+}
+
+.restored-home-pets > .btn {
+  margin-top: 18px;
+}
+
+.restored-consult-card {
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.restored-recent-consult {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--color-neutral-border);
+}
+
+.restored-recent-consult > .badge {
+  margin-left: 10px;
+}
+
+.restored-patient-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.restored-patient-heading h2 {
+  margin: 0 0 6px;
+}
+
+.restored-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 20px;
+  margin: 24px 0;
+}
+
+.restored-detail-grid dt {
+  color: var(--color-neutral-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.restored-detail-grid dd {
+  margin: 8px 0 0;
+  font-weight: 700;
+}
+
+.restored-status-tracker {
+  display: flex;
+  justify-content: space-around;
+  gap: 20px;
+  margin: 26px 0;
+}
+
+.restored-block,
+.active-pets-pill strong {
+  display: block;
+}
+
+.pet-pick-card,
+.vet-card-option {
+  font: inherit;
+  text-align: left;
+  color: inherit;
+}
+
+.pet-pick-card:disabled,
+.vet-card-option:disabled {
+  cursor: default;
+}
+
+.cal-day-cell {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+}
+
+.cal-day-cell:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.booking-summary-side-card {
+  min-width: 0;
+  align-self: start;
+}
+
+.cta-agendamento-dark-card .cta-dark-title {
+  color: #fff;
+}
+
+.cta-agendamento-dark-card .btn-inverted {
+  background-color: #fff;
+  color: var(--color-primary);
+}
+
+.active-pets-pill > div > span {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--color-neutral-muted);
+}
+
+.clinic-toolbar > .input-group {
+  flex: 1 1 220px;
+  width: auto;
+  max-width: 520px;
+}
+
+.tutor-consultas-table-card.clinic-table-scroll,
+.restored-home-pets .pet-detailed-card {
+  min-width: 0;
+}
+
+.restored-home-pets .pet-card-image-box {
+  height: 140px;
+}
+
+.pet-allergy-note {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 980px) {
+  .tutor-home-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .navbar,
+  .tutor-navbar {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+
+  .navbar-links,
+  .tutor-nav-links {
+    order: 3;
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 680px) {
+  .tutor-nav-user .user-meta-name,
+  .navbar-user-info .user-meta-name {
+    display: none;
+  }
+
+  .navbar-logo-text,
+  .tutor-nav-item,
+  .navbar-tab {
+    white-space: nowrap;
+  }
+
+  .pets-gallery-grid,
+  .pets-cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .clinical-history .critical-allergy-alert {
+    flex-wrap: wrap;
+  }
+
+  .meus-pets-header,
+  .meus-pets-toolbar,
+  .section-head-flex,
+  .tutor-dash-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .booking-two-columns-layout .booking-card,
+  .restored-consult-card {
+    padding: 20px;
+  }
+
+  .restored-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Histórico completo do pet */
 .historico-pet-info {
   display: flex;

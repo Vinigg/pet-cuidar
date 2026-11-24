@@ -172,6 +172,13 @@ public class ConsultaService {
         return lembreteDeliveryService.dispararManual(consultaId);
     }
 
+    @Transactional(readOnly = true)
+    public EstadoLembreteDTO obterEstadoLembrete(Long consultaId) {
+        buscarConsulta(consultaId);
+        return lembreteRepository.findByConsultaId(consultaId).map(EstadoLembreteDTO::from)
+                .orElseGet(() -> new EstadoLembreteDTO("NAO_GERADO", null, false, 0, null));
+    }
+
     /** Regra unica de conflito (US2.1): mesmo veterinario, mesmo horario, consulta ativa. */
     private void verificarConflito(Long veterinarioId, LocalDateTime dataHora, Long consultaIgnorada) {
         boolean conflito = consultaRepository

@@ -231,6 +231,48 @@ class AutenticacaoPerfisIntegrationTest {
         return consultasAgenda.saveAndFlush(consulta).getId();
     }
 
+    @Test
+    void cadastrosEEstadoDeLembreteSaoLeiturasRestritasSemDisparo() throws Exception {
+        long tutor = novoTutor();
+        long pet = novoPet(tutor, "Paciente da ficha");
+        long veterinario = novoVeterinario();
+        long consulta = novaConsulta(pet, veterinario);
+        banco.update("UPDATE tutores SET telefone = ?, cpf = ? WHERE id = ?", "81999991234", "12345678909", tutor);
+        Cookie colaborador = contaDeTeste("COLABORADOR", null, null);
+        Cookie contaTutor = contaDeTeste("TUTOR", tutor, null);
+        Cookie vet = contaDeTeste("VETERINARIO", null, veterinario);
+        Cookie admin = contaDeTeste("ADMIN", null, null);
+        mvc.perform(get("/tutores")).andExpect(status().isUnauthorized());
+        for (Cookie perfil : new Cookie[]{contaTutor, vet, admin}) {
+            mvc.perform(get("/tutores").cookie(perfil)).andExpect(status().isForbidden());
+            mvc.perform(get("/consultas/{id}/lembrete", consulta).cookie(perfil))
+                    .andExpect(status().isForbidden());
+        }
+        mvc.perform(get("/tutores").cookie(colaborador)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == " + tutor + ")].pets[0].nome")
+                        .value(org.hamcrest.Matchers.hasItem("Paciente da ficha")))
+                .andExpect(jsonPath("$[*].cpf").doesNotExist());
+        org.mockito.Mockito.clearInvocations(remetente);
+        Integer quantidade = banco.queryForObject("SELECT count(*) FROM lembretes", Integer.class);
+        mvc.perform(get("/consultas/{id}/lembrete", consulta).cookie(colaborador))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("NAO_GERADO"))
+                .andExpect(jsonPath("$.textoEnviado").isEmpty());
+        org.junit.jupiter.api.Assertions.assertEquals(quantidade,
+                banco.queryForObject("SELECT count(*) FROM lembretes", Integer.class));
+        org.mockito.Mockito.verifyNoInteractions(remetente);
+        banco.update("""
+                INSERT INTO lembretes (consulta_id, texto_validado, status_envio, usou_fallback, tentativas)
+                VALUES (?, 'Mensagem realmente persistida', 'ENVIADO', 1, 1)
+                """, consulta);
+        mvc.perform(get("/consultas/{id}/lembrete", consulta).cookie(colaborador))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ENVIADO"))
+                .andExpect(jsonPath("$.textoEnviado").value("Mensagem realmente persistida"))
+                .andExpect(jsonPath("$.usouFallback").value(true));
+        mvc.perform(get("/consultas/999999999/lembrete").cookie(colaborador))
+                .andExpect(status().isNotFound());
+        org.mockito.Mockito.verifyNoInteractions(remetente);
+    }
+
     private Cookie contaDeTeste(String perfil, Long tutor, Long veterinario) {
         String email = tutor == null ? UUID.randomUUID() + "@example.com"
                 : banco.queryForObject("SELECT email_normalizado FROM tutores WHERE id = ?", String.class, tutor);

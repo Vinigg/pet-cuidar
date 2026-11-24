@@ -1,34 +1,25 @@
 import React, { useState } from 'react';
-import { Badge, Button } from '../common/UIComponents';
+import { Button } from '../common/UIComponents';
+import { ConfirmarCancelamento, podeAlterar, ResumoConsulta, statusInfo } from './TutorPresentation';
 
-export default function DetalhesConsulta({ consulta, onVoltar, onRemarcar, onCancelar, cancelando, erro }) {
+export default function DetalhesConsulta({ consulta, pet, onVoltar, onRemarcar, onCancelar, cancelando, erro }) {
     const [confirmar, setConfirmar] = useState(false);
-    const ativa = ['AGENDADA', 'CONFIRMADA'].includes(consulta.status);
-
-    return (
-        <div className="tutor-page-wrapper">
-            <div className="form-card">
-                <h1 className="form-title">Detalhes da consulta</h1>
-                <p><strong>{consulta.petNome}</strong> · {consulta.veterinarioNome}</p>
-                <p>{new Date(consulta.dataHora).toLocaleString('pt-BR')} · <Badge>{consulta.status}</Badge></p>
-                {erro && <p className="alert-box error" role="alert">{erro}</p>}
-                {ativa && confirmar && <p>Confirma o cancelamento desta consulta?</p>}
-                <div className="form-actions-footer">
-                    <Button variant="outlined" onClick={onVoltar}>Voltar às consultas</Button>
-                    {ativa && (confirmar ? (
-                        <>
-                            <Button variant="outlined" disabled={cancelando}
-                                onClick={() => setConfirmar(false)}>Manter consulta</Button>
-                            <Button disabled={cancelando} onClick={onCancelar}>Confirmar cancelamento</Button>
-                        </>
-                    ) : (
-                        <>
-                            <Button variant="outlined" onClick={() => setConfirmar(true)}>Cancelar consulta</Button>
-                            <Button onClick={onRemarcar}>Remarcar</Button>
-                        </>
-                    ))}
-                </div>
+    return <div className="tutor-page-wrapper">
+        <div className="tutor-breadcrumb"><span>Consultas</span><span>/</span><strong>Detalhes</strong></div>
+        <header className="section-head-flex"><div><h1 className="tutor-main-title">Detalhes da consulta</h1><p className="tutor-main-sub">Informações e status do atendimento do seu pet.</p></div><Button variant="outlined" onClick={onVoltar}>Voltar às consultas</Button></header>
+        <div className="booking-two-columns-layout">
+            <div><ResumoConsulta consulta={consulta} pet={pet} />
+                <section className="tutor-consultas-table-card restored-consult-card"><h2 className="section-head-title">Status do atendimento</h2>
+                    <div className="restored-status-tracker"><div className="timeline-tracker-step"><span className="timeline-tracker-dot done">✓</span><strong>Agendamento registrado</strong></div>
+                        <div className="timeline-tracker-step"><span className="timeline-tracker-dot current">●</span><strong>{statusInfo[consulta.status]?.[0] || consulta.status}</strong></div></div>
+                    <p>O status acima corresponde ao registro atual da clínica.</p>
+                </section>
             </div>
+            <aside className="booking-summary-side-card"><h2 className="section-head-title">Gerenciar consulta</h2><p>Confira data, horário e profissional antes de fazer alterações.</p>
+                {podeAlterar(consulta) ? <div className="restored-action-stack"><Button onClick={onRemarcar}>Remarcar</Button><Button variant="outlined" onClick={() => setConfirmar(true)}>Cancelar consulta</Button></div> : <p>Esta consulta não permite cancelamento ou remarcação.</p>}
+                {erro && !confirmar && <p className="alert-box error" role="alert">{erro}</p>}
+            </aside>
         </div>
-    );
+        {confirmar && <ConfirmarCancelamento consulta={consulta} onFechar={() => setConfirmar(false)} onConfirmar={async () => { if (await onCancelar()) setConfirmar(false); }} cancelando={cancelando} erro={erro} />}
+    </div>;
 }

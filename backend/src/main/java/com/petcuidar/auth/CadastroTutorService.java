@@ -31,6 +31,10 @@ public class CadastroTutorService {
         return cadastrar(pedido, email);
     }
 
+    public java.util.List<TutorResponseDTO> listarCadastros() {
+        return tutores.listarCadastros();
+    }
+
     @Transactional
     public SessaoService.Credencial concluir(TutorCadastroDTO pedido, String prova) {
         String email = sessoes.consumirProvaCadastro(prova)

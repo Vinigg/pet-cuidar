@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { dispararLembrete } from '../api/api';
 import { Button, Badge } from './common/UIComponents';
 
-export default function ModalEnviarLembrete({ isOpen, onClose, consulta, onLembreteEnviado }) {
+export default function ModalEnviarLembrete({ isOpen, onClose, consulta, onLembreteEnviado, resultadoInicial, permitirEnvio = true }) {
     const [loading, setLoading] = useState(false);
     const [resultado, setResultado] = useState(null);
     const [erro, setErro] = useState('');
@@ -13,15 +13,15 @@ export default function ModalEnviarLembrete({ isOpen, onClose, consulta, onLembr
         requisicao.current += 1;
         enviando.current = false;
         setLoading(false);
-        setResultado(null);
+        setResultado(resultadoInicial?.status === 'NAO_GERADO' ? null : resultadoInicial || null);
         setErro('');
         return () => { requisicao.current += 1; };
-    }, [isOpen, consulta?.id]);
+    }, [isOpen, consulta?.id, resultadoInicial]);
 
     if (!isOpen || !consulta) return null;
 
     const enviar = async () => {
-        if (enviando.current || resultado?.status === 'ENVIADO') return;
+        if (!permitirEnvio || enviando.current || resultado?.status === 'ENVIADO') return;
         enviando.current = true;
         const atual = requisicao.current;
         setLoading(true);
@@ -65,16 +65,17 @@ export default function ModalEnviarLembrete({ isOpen, onClose, consulta, onLembr
                 </div>
                 <div className={`modal-text-box ${resultado?.usouFallback ? 'fallback' : 'ia'}`}>
                     <div className={`modal-tag-status ${resultado?.usouFallback ? 'fallback' : 'ia'}`}>
-                        {resultado ? resultado.usouFallback ? 'Template padrão validado' : 'Texto validado pelo servidor' : 'Mensagem será gerada no envio'}
+                        {resultado?.textoEnviado ? resultado.usouFallback ? 'Template padrão validado' : 'Texto validado pelo servidor' : permitirEnvio ? 'Mensagem será gerada no envio' : 'Sem texto de lembrete registrado'}
                     </div>
-                    <p className="modal-body-text">{resultado?.textoEnviado || 'Após o processamento, o texto validado será exibido aqui.'}</p>
+                    <p className="modal-body-text">{resultado?.textoEnviado || (permitirEnvio ? 'Após o processamento, o texto validado será exibido aqui.' : 'Nenhuma mensagem registrada para esta consulta.')}</p>
                 </div>
                 {enviado && <p role="status" className="alert-box success">Lembrete enviado por e-mail.</p>}
                 {erro && <div className="input-error-msg" role="alert">{erro}</div>}
+                {!erro && resultado?.status === 'FALHOU' && <p className="input-error-msg" role="alert">{resultado.ultimoErro || 'A entrega deste lembrete falhou.'}</p>}
                 <div className="modal-actions" style={{ gap: 10 }}>
                     <Button variant="outlined" size="sm" onClick={onClose} disabled={loading}>{enviado ? 'Fechar' : 'Cancelar'}</Button>
-                    <Button variant="primary" size="sm" onClick={enviar} disabled={loading || enviado}>
-                        {loading ? 'Enviando...' : enviado ? 'Lembrete Enviado ✓' : 'Enviar lembrete →'}
+                    <Button variant="primary" size="sm" onClick={enviar} disabled={loading || enviado || !permitirEnvio}>
+                        {loading ? 'Enviando...' : enviado ? 'Lembrete Enviado ✓' : permitirEnvio ? 'Enviar lembrete →' : 'Envio indisponível'}
                     </Button>
                 </div>
             </div>

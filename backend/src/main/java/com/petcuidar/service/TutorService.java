@@ -21,6 +21,16 @@ public class TutorService {
         this.tutorRepository = tutorRepository;
     }
 
+    @Transactional(readOnly = true)
+    public java.util.List<TutorResponseDTO> listarCadastros() {
+        return tutorRepository.findAll(org.springframework.data.domain.Sort.by("nome", "id")).stream()
+                .map(tutor -> new TutorResponseDTO(tutor.getId(), tutor.getNome(), tutor.getEmail(),
+                        tutor.getTelefone(), tutor.getPets().stream()
+                                .map(p -> new PetResponseDTO(p.getId(), p.getNome(), p.getEspecie(),
+                                        p.getIdade(), p.getAlergiasCriticas())).toList()))
+                .toList();
+    }
+
     // US1.1: o cadastro so e salvo com e-mail valido (garantido pelo @Valid no
     // controller) e pelo menos um pet vinculado (garantido pelo @NotEmpty no DTO).
     @Transactional

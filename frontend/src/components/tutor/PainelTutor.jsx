@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { atualizarStatusConsulta, listarMeusPets, listarMinhasConsultas } from '../../api/api';
 import AgendamentoForm from '../AgendamentoForm';
 import { Button } from '../common/UIComponents';
@@ -13,7 +13,8 @@ export default function PainelTutor({ conta, aba, consultaId, navegar }) {
     const [dados, setDados] = useState(null);
     const [erro, setErro] = useState('');
     const [cancelando, setCancelando] = useState(false);
-    const precisaPets = aba === 'inicio' || aba === 'meus-pets';
+    const mutacao = useRef(false);
+    const precisaPets = ['inicio', 'meus-pets', 'detalhes-consulta'].includes(aba);
     const precisaConsultas = aba !== 'meus-pets' && aba !== 'agendar-consulta' && aba !== 'cadastrar-pet';
 
     useEffect(() => {
@@ -29,9 +30,28 @@ export default function PainelTutor({ conta, aba, consultaId, navegar }) {
     }, [precisaPets, precisaConsultas]);
 
     const consultas = () => navegar('consultas');
+    const cancelar = async (id = consultaId) => {
+        if (mutacao.current) return false;
+        mutacao.current = true;
+        setCancelando(true);
+        setErro('');
+        try {
+            const { data } = await atualizarStatusConsulta(id, 'CANCELADA');
+            setDados(atuais => ({
+                ...atuais, consultas: atuais.consultas.map(item => item.id === data.id ? data : item)
+            }));
+            return true;
+        } catch (e) {
+            setErro(e.response?.data?.mensagem || 'Não foi possível cancelar a consulta.');
+            return false;
+        } finally {
+            mutacao.current = false;
+            setCancelando(false);
+        }
+    };
     if (aba === 'agendar-consulta') {
         return <AgendamentoForm onSucesso={(consulta) => navegar('sucesso-agendamento', consulta.id)}
-            onCancelar={consultas} />;
+            visualTutor onCancelar={consultas} />;
     }
     if (aba === 'cadastrar-pet') {
         const pets = () => navegar('meus-pets');
@@ -44,6 +64,8 @@ export default function PainelTutor({ conta, aba, consultaId, navegar }) {
     if (aba === 'meus-pets') return <TutorMeusPets pets={dados.pets}
         onCadastrarOutroPet={() => navegar('cadastrar-pet')} onAgendarConsulta={() => navegar('agendar-consulta')} />;
     if (aba === 'consultas') return <TutorConsultas consultas={dados.consultas}
+        cancelando={cancelando} erro={erro} onCancelar={cancelar}
+        onRemarcar={id => navegar('remarcar-consulta', id)}
         onAgendar={() => navegar('agendar-consulta')} onVerDetalhes={(id) => navegar('detalhes-consulta', id)} />;
 
     const consulta = dados.consultas.find((item) => String(item.id) === consultaId);
@@ -53,23 +75,8 @@ export default function PainelTutor({ conta, aba, consultaId, navegar }) {
     if (aba === 'sucesso-agendamento') return <ConsultaAgendadaSucesso dados={consulta}
         onVerConsultas={consultas} onVoltarInicio={() => navegar('inicio')} />;
     if (aba === 'remarcar-consulta') return <AgendamentoForm consulta={consulta}
-        onSucesso={(nova) => navegar('detalhes-consulta', nova.id)} onCancelar={consultas} />;
+        visualTutor onSucesso={(nova) => navegar('detalhes-consulta', nova.id)} onCancelar={consultas} />;
 
-    const cancelar = async () => {
-        setCancelando(true);
-        setErro('');
-        try {
-            const { data } = await atualizarStatusConsulta(consulta.id, 'CANCELADA');
-            setDados((atuais) => ({
-                ...atuais, consultas: atuais.consultas.map((item) => item.id === data.id ? data : item)
-            }));
-        } catch (e) {
-            setErro(e.response?.data?.mensagem || 'Não foi possível cancelar a consulta.');
-        } finally {
-            setCancelando(false);
-        }
-    };
-
-    return <DetalhesConsulta consulta={consulta} onVoltar={consultas} erro={erro} cancelando={cancelando}
+    return <DetalhesConsulta consulta={consulta} pet={dados.pets.find(p => p.id === consulta.petId)} onVoltar={consultas} erro={erro} cancelando={cancelando}
         onRemarcar={() => navegar('remarcar-consulta', consulta.id)} onCancelar={cancelar} />;
 }

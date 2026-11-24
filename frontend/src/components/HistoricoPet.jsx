@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Badge, Button } from './common/UIComponents';
 import { listarPets, obterHistoricoPet, obterResumoHistoricoPet } from '../api/api';
+import RegistroNoProntuario from './RegistroNoProntuario';
 
 const STATUS_LABEL = {
   AGENDADA: { label: 'Agendada', variant: 'warning' },
@@ -38,10 +39,12 @@ function RegistroClinico({ atendimento }) {
   );
 }
 
-export default function HistoricoPet({ onRegistrarAtendimento }) {
+export default function HistoricoPet({ onRegistrarAtendimento, conta }) {
   const [pets, setPets] = useState([]);
   const [petId, setPetId] = useState('');
   const [erroPets, setErroPets] = useState('');
+  const [atualizacao, setAtualizacao] = useState(0);
+  const [avisoSalvo, setAvisoSalvo] = useState('');
 
   const [historico, setHistorico] = useState(null);
   const [carregandoHistorico, setCarregandoHistorico] = useState(false);
@@ -93,7 +96,7 @@ export default function HistoricoPet({ onRegistrarAtendimento }) {
       .finally(() => { if (!cancelado) setCarregandoResumo(false); });
 
     return () => { cancelado = true; };
-  }, [petId]);
+  }, [petId, atualizacao]);
 
   const irParaHistorico = () => {
     historicoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -131,7 +134,7 @@ export default function HistoricoPet({ onRegistrarAtendimento }) {
               id="historico-pet"
               className="select-custom"
               value={petId}
-              onChange={(e) => setPetId(e.target.value)}
+              onChange={(e) => { setPetId(e.target.value); setAvisoSalvo(''); }}
             >
               <option value="">Selecione um pet...</option>
               {pets.map((p) => (
@@ -145,6 +148,7 @@ export default function HistoricoPet({ onRegistrarAtendimento }) {
         </header>
 
         {erroPets && <p className="alert-box error" role="alert">{erroPets}</p>}
+        {avisoSalvo && <p className="alert-box success" role="status">{avisoSalvo}</p>}
         {!petId ? (
           <div className="empty-state">Selecione um pet para visualizar o histórico.</div>
         ) : (
@@ -298,9 +302,12 @@ export default function HistoricoPet({ onRegistrarAtendimento }) {
             </section>
             </div>
             <aside className="table-card clinical-record-actions">
-              <h2 style={{ fontSize: '1.1rem' }}>Registrar atendimento</h2>
-              <p>Registre a evolução clínica na consulta do paciente. O atendimento será salvo no prontuário pelo servidor.</p>
-              {onRegistrarAtendimento && <Button onClick={onRegistrarAtendimento}>Registrar atendimento →</Button>}
+              {conta?.veterinarioId && historico ? <RegistroNoProntuario key={petId}
+                petId={Number(petId)} petNome={historico.petNome} veterinarioId={conta.veterinarioId}
+                consultas={consultas} onSalvo={() => { setAvisoSalvo('Atendimento registrado no prontuário.'); setAtualizacao(a => a + 1); }} />
+                : <><h2 style={{ fontSize: '1.1rem' }}>Registrar atendimento</h2>
+                  <p>Selecione um paciente para registrar a evolução clínica.</p></>}
+              {onRegistrarAtendimento && <Button variant="outlined" onClick={onRegistrarAtendimento}>Abrir gestão de atendimentos →</Button>}
               <p className="historico-aviso-ia">Os alertas críticos vêm do cadastro do paciente e permanecem visíveis quando a IA está indisponível.</p>
             </aside>
             </div>
