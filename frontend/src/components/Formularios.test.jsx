@@ -28,7 +28,7 @@ beforeEach(() => {
   jest.resetAllMocks();
   axios.get.mockResolvedValue({ data: [] });
   listarConsultasDoDia.mockResolvedValue({ data: [] });
-  listarPets.mockResolvedValue({ data: [{ id: 12, nome: "Luna", especie: "Gato", tutorNome: "Ana" }] });
+  listarPets.mockResolvedValue({ data: [{ id: 12, nome: "Luna", especie: "Gato", tutorId: 7, tutorNome: "Ana" }] });
   listarVeterinarios.mockResolvedValue({ data: [{ id: 3, nome: "Maria" }] });
   listarDisponibilidade.mockImplementation((...argumentos) => Promise.resolve({
     data: argumentos[1] === "2099-12-10"
@@ -86,8 +86,9 @@ const abrirAgendamento = async () => {
   await act(async () => root.render(<AgendamentoForm />));
 };
 const buscarHorarios = async () => {
-  await preencher("select:nth-of-type(1)", "12");
-  const veterinario = container.querySelectorAll("select")[1];
+  await preencher("#agendamento-tutor", "7");
+  await preencher("#agendamento-pet", "12");
+  const veterinario = container.querySelector("#agendamento-veterinario");
   await act(async () => Simulate.change(veterinario, { target: { value: "3" } }));
   await preencher('input[type="date"]', "2099-12-10");
   await act(async () => {});
@@ -95,9 +96,11 @@ const buscarHorarios = async () => {
 
 test("agendamento mostra nomes e envia apenas o id do pet escolhido", async () => {
   await abrirAgendamento();
-  expect(container.textContent).toContain("Luna - Gato (Tutor: Ana)");
+  expect(container.textContent).toContain("Ana · cadastro #7");
+  expect(container.querySelector("#agendamento-pet").disabled).toBe(true);
   expect(container.querySelector('input[type="number"]')).toBeNull();
   await buscarHorarios();
+  expect(container.querySelector("#agendamento-pet").textContent).toContain("Luna (Gato) · pet #12");
   act(() => Simulate.click(container.querySelector("button.horario")));
   await enviar();
   expect(criarConsulta).toHaveBeenCalledWith({ petId: 12, veterinarioId: 3, dataHora: "2099-12-10T09:00:00" });

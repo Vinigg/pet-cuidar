@@ -273,6 +273,36 @@ class AutenticacaoPerfisIntegrationTest {
         org.mockito.Mockito.verifyNoInteractions(remetente);
     }
 
+    @Test
+    void identificaTutoresHomonimosSemAmpliarOsPacientesDoVeterinario() throws Exception {
+        long tutor = novoTutor(), outroTutor = novoTutor();
+        long pet = novoPet(tutor, "Luna"), outroPet = novoPet(outroTutor, "Luna");
+        long segundoPet = novoPet(tutor, "Luna");
+        long veterinario = novoVeterinario(), outroVeterinario = novoVeterinario();
+        novaConsulta(pet, veterinario);
+        novaConsulta(segundoPet, veterinario);
+        novaConsulta(outroPet, outroVeterinario);
+        Cookie colaborador = contaDeTeste("COLABORADOR", null, null);
+        Cookie vet = contaDeTeste("VETERINARIO", null, veterinario);
+        Cookie titular = contaDeTeste("TUTOR", tutor, null);
+
+        mvc.perform(get("/pets").cookie(colaborador).param("tutorId", String.valueOf(outroTutor)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(outroPet))
+                .andExpect(jsonPath("$[0].tutorId").value(outroTutor))
+                .andExpect(jsonPath("$[0].tutorNome").value("Tutor"));
+        mvc.perform(get("/pets").cookie(vet).param("tutorId", String.valueOf(outroTutor)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].tutorId").value(tutor))
+                .andExpect(jsonPath("$[1].tutorId").value(tutor))
+                .andExpect(jsonPath("$[*].id").value(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.hasItem((int) outroPet))));
+        mvc.perform(get("/pets").cookie(titular).param("tutorId", String.valueOf(outroTutor)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].tutorId").value(tutor))
+                .andExpect(jsonPath("$[1].tutorId").value(tutor));
+    }
+
     private Cookie contaDeTeste(String perfil, Long tutor, Long veterinario) {
         String email = tutor == null ? UUID.randomUUID() + "@example.com"
                 : banco.queryForObject("SELECT email_normalizado FROM tutores WHERE id = ?", String.class, tutor);

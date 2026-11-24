@@ -3129,6 +3129,16 @@ body {
 }
 
 /* Histórico completo do pet */
+.selecao-tutor-pet {
+  margin: 18px 0 24px;
+}
+
+.selecao-tutor-pet .input-group,
+.selecao-tutor-pet .select-custom {
+  min-width: 0;
+  width: 100%;
+}
+
 .historico-pet-info {
   display: flex;
   flex-wrap: wrap;

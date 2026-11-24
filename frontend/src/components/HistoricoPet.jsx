@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Badge, Button } from './common/UIComponents';
 import { listarPets, obterHistoricoPet, obterResumoHistoricoPet } from '../api/api';
 import RegistroNoProntuario from './RegistroNoProntuario';
+import SelecaoTutorPet from './SelecaoTutorPet';
 
 const STATUS_LABEL = {
   AGENDADA: { label: 'Agendada', variant: 'warning' },
@@ -42,6 +43,8 @@ function RegistroClinico({ atendimento }) {
 export default function HistoricoPet({ onRegistrarAtendimento, conta }) {
   const [pets, setPets] = useState([]);
   const [petId, setPetId] = useState('');
+  const [tutorId, setTutorId] = useState('');
+  const [carregandoPets, setCarregandoPets] = useState(true);
   const [erroPets, setErroPets] = useState('');
   const [atualizacao, setAtualizacao] = useState(0);
   const [avisoSalvo, setAvisoSalvo] = useState('');
@@ -61,7 +64,8 @@ export default function HistoricoPet({ onRegistrarAtendimento, conta }) {
     let ativo = true;
     listarPets()
       .then((res) => { if (ativo) setPets(Array.isArray(res.data) ? res.data : []); })
-      .catch(() => { if (ativo) setErroPets('Não foi possível carregar os pacientes.'); });
+      .catch(() => { if (ativo) setErroPets('Não foi possível carregar os pacientes.'); })
+      .finally(() => { if (ativo) setCarregandoPets(false); });
     return () => { ativo = false; };
   }, []);
 
@@ -73,7 +77,11 @@ export default function HistoricoPet({ onRegistrarAtendimento, conta }) {
     setErroHistorico(null);
     setErroResumo(false);
     setFiltroStatus('');
-    if (!petId) return;
+    if (!petId) {
+      setCarregandoHistorico(false);
+      setCarregandoResumo(false);
+      return;
+    }
 
     let cancelado = false;
 
@@ -126,31 +134,17 @@ export default function HistoricoPet({ onRegistrarAtendimento, conta }) {
             </p>
           </div>
 
-          <div style={{ minWidth: '280px' }}>
-            <label className="input-label" htmlFor="historico-pet" style={{ marginBottom: '6px', display: 'block' }}>
-              PACIENTE
-            </label>
-            <select
-              id="historico-pet"
-              className="select-custom"
-              value={petId}
-              onChange={(e) => { setPetId(e.target.value); setAvisoSalvo(''); }}
-            >
-              <option value="">Selecione um pet...</option>
-              {pets.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nome} ({p.especie}) - Tutor: {p.tutorNome}
-                </option>
-              ))}
-            </select>
-          </div>
           <Button variant="outlined" size="sm" onClick={() => window.print()}>🖨️ Imprimir</Button>
         </header>
 
+        <SelecaoTutorPet pets={pets} tutorId={tutorId} petId={petId} prefixo="historico"
+          carregando={carregandoPets} onTutorChange={id => { setTutorId(id); setPetId(''); setAvisoSalvo(''); }}
+          onPetChange={id => { setPetId(id); setAvisoSalvo(''); }} />
         {erroPets && <p className="alert-box error" role="alert">{erroPets}</p>}
+        {!carregandoPets && !erroPets && !pets.length && <p className="empty-state">Nenhum paciente vinculado às suas consultas.</p>}
         {avisoSalvo && <p className="alert-box success" role="status">{avisoSalvo}</p>}
         {!petId ? (
-          <div className="empty-state">Selecione um pet para visualizar o histórico.</div>
+          <div className="empty-state">Selecione um tutor e um pet para visualizar o histórico.</div>
         ) : (
           <>
             {historico && (

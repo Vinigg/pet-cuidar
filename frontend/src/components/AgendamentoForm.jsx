@@ -2,10 +2,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Badge } from './common/UIComponents';
 import { criarConsulta, listarDisponibilidade, listarPets, listarVeterinarios, reagendarConsulta } from '../api/api';
 import CalendarioConsulta from './CalendarioConsulta';
+import SelecaoTutorPet from './SelecaoTutorPet';
 
 export default function AgendamentoForm({ tutorId, consulta, onSucesso, onCancelar, visualTutor = false }) {
   const [opcoesPets, setOpcoesPets] = useState([]);
   const [veterinarios, setVeterinarios] = useState([]);
+  const [tutorSelecionado, setTutorSelecionado] = useState(tutorId ? String(tutorId) : '');
 
   const [petId, setPetId] = useState(consulta ? String(consulta.petId) : '');
   const [veterinarioId, setVeterinarioId] = useState(consulta ? String(consulta.veterinarioId) : '');
@@ -32,13 +34,17 @@ export default function AgendamentoForm({ tutorId, consulta, onSucesso, onCancel
       ]);
       setOpcoesPets(Array.isArray(resPets.data) ? resPets.data : []);
       setVeterinarios(Array.isArray(resVets.data) ? resVets.data : []);
+      if (consulta) {
+        const paciente = resPets.data.find(p => String(p.id) === String(consulta.petId));
+        setTutorSelecionado(paciente?.tutorId != null ? String(paciente.tutorId) : '');
+      }
     } catch (err) {
       setOpcoesPets([]);
       setErroPets('Nao foi possivel carregar os pets.');
     } finally {
       setCarregandoOpcoes(false);
     }
-  }, [tutorId]);
+  }, [tutorId, consulta]);
 
   useEffect(() => {
     carregarOpcoes();
@@ -73,6 +79,11 @@ export default function AgendamentoForm({ tutorId, consulta, onSucesso, onCancel
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (enviando.current) return;
+    if (!visualTutor && (!tutorSelecionado || !opcoesPets.some(p =>
+        String(p.id) === petId && String(p.tutorId) === tutorSelecionado))) {
+      setErro('Selecione o tutor e um pet vinculado a ele.');
+      return;
+    }
     if (!petId || !veterinarioId || !dataConsulta || !horarioSelecionado) {
       setErro('Por favor, selecione todas as opções e o horário desejado.');
       return;
@@ -164,28 +175,19 @@ export default function AgendamentoForm({ tutorId, consulta, onSucesso, onCancel
                     </button>)}
                   </div>
                 </div>
-              ) : <div className="form-grid-2">
+              ) : <>
+                <SelecaoTutorPet pets={opcoesPets} tutorId={tutorSelecionado} petId={petId}
+                  prefixo="agendamento" carregando={carregandoOpcoes} disabled={Boolean(consulta) || loading}
+                  onTutorChange={id => {
+                    setTutorSelecionado(id); setPetId(''); setHorarioSelecionado('');
+                    setMensagemSucesso(null); setErro(null);
+                  }}
+                  onPetChange={setPetId} />
+                <div className="form-grid-2">
                 <div className="input-group">
-                  <label className="input-label">SELECIONE O PET (TUTOR)</label>
+                  <label className="input-label" htmlFor="agendamento-veterinario">VETERINÁRIO(A)</label>
                   <select
-                      className="select-custom"
-                      value={petId}
-                      onChange={(e) => setPetId(e.target.value)}
-                      disabled={Boolean(consulta) || carregandoOpcoes || Boolean(erroPets) || opcoesPets.length === 0}
-                      required
-                  >
-                    <option value="">Escolha um pet...</option>
-                    {opcoesPets.map(op => (
-                        <option key={op.id} value={op.id}>
-                          {op.nome} - {op.especie} (Tutor: {op.tutorNome})
-                        </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="input-group">
-                  <label className="input-label">VETERINÁRIO(A)</label>
-                  <select
+                      id="agendamento-veterinario"
                       className="select-custom"
                       value={veterinarioId}
                       onChange={(e) => setVeterinarioId(e.target.value)}
@@ -200,7 +202,8 @@ export default function AgendamentoForm({ tutorId, consulta, onSucesso, onCancel
                     ))}
                   </select>
                 </div>
-              </div>}
+                </div>
+              </>}
             </div>
 
             <hr className="form-divider" />
