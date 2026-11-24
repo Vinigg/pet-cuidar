@@ -15,25 +15,58 @@ Stack escolhida pelo grupo:
 
 ```
 pet-cuidar/
-├── backend/    -> API REST em Spring Boot
-├── frontend/   -> aplicacao React (Create React App)
+├── backend/                -> API REST em Spring Boot
+├── frontend/               -> aplicacao React (Create React App)
+├── microservico-predicao/  -> servico Python (FastAPI) de predicao de no-show
+├── docs/                   -> contratos, regras e roteiros
+├── docker-compose.yml      -> back-end + predicao rodando juntos
 ├── README.md
-└── DEPLOY.md   -> notas de deploy na AWS
+└── DEPLOY.md               -> notas de deploy na AWS
 ```
+
+## Rodando tudo junto (Docker)
+
+Na primeira configuração, copie o [exemplo da raiz](.env.example) para `.env` ao lado do `docker-compose.yml`. Preencha os valores locais nesse arquivo. Depois inicie o back-end e o serviço de predição.
+
+```bash
+docker compose up --build   # back-end em http://localhost:8080 + predicao (rede interna)
+```
+
+Depois suba o front com `npm start` (secao abaixo). O roteiro de teste de
+ponta a ponta esta em [docs/teste-ponta-a-ponta.md](docs/teste-ponta-a-ponta.md).
 
 ## Rodando o back-end
 
-Pre-requisitos: Java 17+ e Maven.
+Pré-requisitos de Java 17 e Maven.
+
+Na primeira configuração, copie [backend/.env.example](backend/.env.example) para `backend/.env`. Preencha o arquivo local com valores sem aspas. O perfil `local` carrega esse arquivo quando você inicia a API de dentro de `backend/`.
 
 ```bash
 cd backend
-mvn spring-boot:run
+mvn spring-boot:run "-Dspring-boot.run.profiles=local"
 ```
 
-A API sobe em `http://localhost:8080`. O banco SQLite (`petcuidar.db`) e criado
-automaticamente na raiz de `backend/` na primeira execucao, com dois
-veterinarios de exemplo (`DataSeeder`).
+A API abre em `http://localhost:8080`. O exemplo usa o banco SQLite `petcuidar-login-teste.db` dentro de `backend/`.
 
+### E-mails locais com Mailpit
+
+Os exemplos de ambiente usam o provedor SMTP e a caixa local Mailpit. Para subir os serviços com Docker, execute na raiz.
+
+```bash
+docker compose --profile local-email up -d --build
+```
+
+Abra http://localhost:8025 para ver os códigos enviados. Use o e-mail de `AUTH_ADMIN_EMAIL` na entrada do Admin. Para testar Tutor, use **Criar conta de tutor** com outro endereço, como `tutor@petcuidar.local`, e leia o código na mesma caixa Mailpit. O Admin cadastra colaboradores e vincula veterinários em **Contas da equipe**. Cada perfil precisa de um endereço próprio.
+
+Para executar a API pelo Maven, inicie apenas o Mailpit com Docker e use `SMTP_HOST=localhost` no `backend/.env`.
+
+```bash
+docker compose --profile local-email up -d mailpit
+cd backend
+mvn spring-boot:run "-Dspring-boot.run.profiles=local"
+```
+
+Dentro do Compose, o back-end usa `SMTP_HOST=mailpit`. O Mailpit captura mensagens de qualquer destinatário e permite ler os códigos no navegador. As portas da caixa de desenvolvimento estão vinculadas ao endereço local da máquina.
 ### Cadastro e escala de veterinarios
 
 A API permite cadastrar/editar/inativar profissionais, manter periodos semanais
@@ -47,8 +80,7 @@ de salvar separados. Bloqueios por data seguem disponiveis pela API.
 Contrato, regras e cuidados com a migracao do SQLite:
 [veterinarios-agenda.md](docs/veterinarios-agenda.md). Exemplos de requisicoes:
 [veterinarios-agenda.http](backend/requests/veterinarios-agenda.http).
-Faca backup do banco antes de atualizar um ambiente com dados reais. O projeto
-ainda precisa de autenticacao e autorizacao do perfil da recepcao para producao.
+Faca backup do banco antes de atualizar um ambiente com dados reais.
 
 ## Rodando o front-end
 
@@ -61,40 +93,41 @@ npm install
 npm start
 ```
 
-A aplicacao sobe em `http://localhost:3000` e consome a API pela URL definida
-em `REACT_APP_API_URL` (`.env`).
+A aplicação sobe em `http://localhost:3000`. Em desenvolvimento, o React encaminha as chamadas à API local na porta 8080. Para um build de produção, veja [Autenticação por e-mail no deploy](DEPLOY.md#autenticação-por-e-mail).
 
-## Fluxo para testar rapidamente
+## Login e painéis
 
-1. Aba **Cadastro**: cadastre um tutor com pelo menos um pet (anote o `id` do
-   pet retornado, se quiser consultar via API/Postman).
-2. Aba **Agendar consulta**: escolha um veterinario (os dois de exemplo ja
-   existem), uma data e um horario livre; informe o id do pet cadastrado.
-3. Aba **Painel do dia**: veja a consulta criada, calcule o risco de falta e
-   dispare o lembrete (gerado por IA, com fallback automatico).
-4. Aba **Historico do pet**: consulte o resumo gerado por IA e o historico
-   completo do pet.
-5. Aba **Veterinarios**: informe nome, especialidade e ao menos um dia de
-  atendimento; cadastre os periodos e confirme o cadastro. O profissional
-  fica disponivel ao abrir a aba **Agendar consulta**.
+Informe o e-mail cadastrado e digite o código de oito dígitos recebido. O código vale por dez minutos e só pode ser usado uma vez. Com `EMAIL_PROVIDER=smtp`, os códigos ficam na caixa Mailpit em http://localhost:8025. Para entrega externa, configure `EMAIL_PROVIDER=resend`, `EMAIL_FROM` e `RESEND_API_KEY`. O provedor `local` apenas simula o envio.
+
+| Perfil | Área |
+| --- | --- |
+| Tutor | Pets e consultas da própria conta. O autocadastro verifica o e-mail antes de criar a conta. |
+| Veterinário | Histórico de pets vinculados às suas consultas e registro de atendimentos. |
+| Colaborador | Painel do dia, agendamento e cadastro de tutores e pets. |
+| Admin | Gestão de veterinários e cadastro de contas da equipe. |
+
+O Admin inicial entra com o e-mail configurado em `AUTH_ADMIN_EMAIL`. Em **Veterinários**, cadastre o profissional e a escala. Em **Contas da equipe**, vincule o e-mail do veterinário e cadastre os colaboradores.
 
 ## Integracoes de IA, predicao e e-mail
 
-O modo local funciona sem credenciais externas: `IA_PROVIDER=simulator`,
-`LLM_PROVIDER=simulador` e `EMAIL_PROVIDER=local`. O resumo do historico tambem
-usa o simulador por padrao. A geracao dos lembretes conta com timeout, circuit
-breaker, guardrail deterministico e template de fallback; falhas da IA nao
-impedem a geracao do texto validado.
+O modo local funciona sem credenciais externas: `LLM_PROVIDER=simulador`
+(padrao) e `EMAIL_PROVIDER=local`. Lembrete, resumo do historico e predicao de
+no-show contam com timeout, circuit breaker proprio de cada integracao e
+fallback deterministico: falha de IA nunca vira erro 5xx (a resposta sai com
+`usouFallback=true` ou score indisponivel). Detalhes em
+[docs/resiliencia-ia.md](docs/resiliencia-ia.md).
 
-Para validacao explicita com servicos externos:
+O provedor de IA e escolhido por `LLM_PROVIDER` e exatamente um cliente e
+registrado; valor invalido impede a inicializacao com mensagem clara. Cada
+provedor usa as proprias variaveis:
 
-- **OpenAI:** `IA_PROVIDER=openai`, `LLM_API_KEY`, `LLM_MODEL` e, se necessario,
-  `LLM_BASE_URL` habilitam o adapter compativel com OpenAI.
-- **Anthropic:** as propriedades estao disponiveis por `LLM_PROVIDER`,
-  `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_EFFORT` e
-  `LLM_MAX_TOKENS`. A ativacao deve aguardar o alinhamento da selecao de
-  clientes IA: na configuracao atual, o simulador e o cliente Anthropic podem
-  ser registrados simultaneamente.
+- **`openai`** (API compativel com `/chat/completions`): `IA_OPENAI_API_KEY`,
+  `IA_OPENAI_MODEL` e, se necessario, `IA_OPENAI_BASE_URL`.
+- **`llm-externo`**: `LLM_API_KEY` e, se necessario, `LLM_MODEL`,
+  `LLM_BASE_URL`, `LLM_EFFORT` e `LLM_MAX_TOKENS`. Sem chave, a aplicacao sobe
+  e os lembretes saem pelo template.
+
+Exemplo: `LLM_PROVIDER=llm-externo` e `LLM_API_KEY=<sua-chave>`.
 - `NOSHOW_PREDICTOR_BASE_URL` aponta para o microservico FastAPI em
   `microservico-predicao/`; falha, timeout ou resposta invalida retornam score
   indisponivel, nunca um risco inventado.
@@ -109,23 +142,39 @@ fuso `America/Recife`. Consultas canceladas e lembretes ja processados nao
 sao enviados novamente. Todas as credenciais devem ficar em variaveis de
 ambiente e nunca ser adicionadas ao Git.
 
-| Variavel | Padrao | Descricao |
-|---|---|---|
-| `LLM_PROVIDER` | `simulador` | `anthropic` para usar o LLM real |
-| `LLM_API_KEY` | (vazio) | Chave da API. Nunca versionar |
-| `LLM_MODEL` | `claude-opus-5-5` | Modelo |
-| `LLM_EFFORT` | `low` | Nivel de esforco do modelo |
-| `LLM_MAX_TOKENS` | `2048` | Teto de tokens da resposta |
-| `LLM_BASE_URL` | `https://api.anthropic.com` | Endpoint |
+| Variavel | Provedor | Padrao | Descricao |
+|---|---|---|---|
+| `LLM_PROVIDER` | — | `simulador` | `simulador`, `openai` ou `llm-externo` |
+| `IA_OPENAI_API_KEY` | `openai` | (vazio) | Chave da API. Nunca versionar |
+| `IA_OPENAI_MODEL` | `openai` | `gpt-4o-mini` | Modelo |
+| `IA_OPENAI_BASE_URL` | `openai` | `https://api.openai.com/v1` | Endpoint |
+| `LLM_API_KEY` | `llm-externo` | (vazio) | Chave da API. Nunca versionar |
+| `LLM_MODEL` | `llm-externo` | ver `application.properties` | Modelo |
+| `LLM_BASE_URL` | `llm-externo` | ver `application.properties` | Endpoint |
+| `LLM_EFFORT` | `llm-externo` | `low` | Nivel de esforco do modelo |
+| `LLM_MAX_TOKENS` | `llm-externo` | `2048` | Teto de tokens da resposta |
+
+Timeout e circuit breaker podem ser ajustados por integracao
+(`ia.lembrete.*`, `ia.resumo.*`, `ia.predicao.*`); sem ajuste valem
+`ia.timeout-ms=5000`, `ia.circuit-breaker.max-falhas=3` e
+`ia.circuit-breaker.reset-ms=30000`.
 
 Detalhes de deploy e configuracao de segredos: [DEPLOY.md](DEPLOY.md). Exemplos
 de requisicoes da API: [consultas-lembretes.http](backend/requests/consultas-lembretes.http).
 
 ## Endpoints principais da API
 
+Rotas privadas exigem a sessão retornada por `POST /auth/verificar`. Em chamadas diretas, envie o cookie `pc_sessao` e, para métodos que alteram dados, o cabeçalho `X-Pet-Cuidar: 1`.
+
+Erros seguem o formato padrao `{status, mensagem, timestamp}`; a tabela de
+quando cada codigo e usado (400, 404, 409, 500, 502, 504) esta em
+[docs/erros-api.md](docs/erros-api.md).
+
 | Metodo | Endpoint | Descricao |
 |---|---|---|
-| POST | `/tutores` | Cadastra tutor e pet(s) |
+| POST | `/auth/codigo` | Solicita código por e-mail para entrada ou autocadastro |
+| POST | `/auth/verificar` | Verifica o código e retorna a sessão ou a prova de cadastro |
+| POST | `/tutores` | Cadastra tutor e pet(s) pelo perfil Colaborador |
 | GET | `/veterinarios` | Lista veterinarios |
 | GET | `/veterinarios/{id}/disponibilidade?data=` | Horarios livres/ocupados no dia |
 | POST | `/consultas` | Cria agendamento (valida conflito de horario) |
@@ -133,7 +182,7 @@ de requisicoes da API: [consultas-lembretes.http](backend/requests/consultas-lem
 | PATCH | `/consultas/{id}/reagendamento` | Altera data/hora revalidando disponibilidade e conflito |
 | GET | `/consultas?data=` | Lista consultas do dia (painel da recepcionista) |
 | GET | `/consultas/{id}/predicao-no-show` | Score de risco de falta + motivo |
-| POST | `/consultas/{id}/lembrete` | Gera e valida o lembrete com fallback, entrega de forma idempotente; retorna 409 se a consulta estiver cancelada |
+| POST | `/consultas/{id}/lembrete` | Gera e valida o lembrete com fallback, entrega de forma idempotente; retorna 409 se a consulta estiver cancelada, 502 se o e-mail nao for entregue e 504 se o provedor de e-mail nao responder no tempo limite |
 | GET | `/pets/{id}/historico` | Historico completo do pet |
 | GET | `/pets/{id}/historico/resumo` | Resumo gerado por IA + link do historico |
 
@@ -142,16 +191,10 @@ Exemplos de requisicoes: `backend/requests/consultas-lembretes.http`.
 
 ## Limitacoes conhecidas do MVP
 
-- Sem autenticacao/login implementados (o documento de arquitetura previa JWT
-  para recepcionista/veterinario — fica como proxima etapa). Por isso as
-  operacoes "da recepcao" (status, cancelamento, reagendamento) nao estao
-  restritas por perfil.
 - Nao ha job automatico de lembretes (PC-029); o envio e disparado pela API.
 - SQLite e um banco em arquivo unico: adequado para o MVP e para demonstracao,
   mas nao recomendado para multiplas instancias do back-end rodando em
   paralelo (ver `DEPLOY.md`).
-- Autenticacao/autorizacao por JWT ainda nao foi implementada; portanto os
-  endpoints devem permanecer em ambiente controlado ate essa frente ser entregue.
 - O adapter Resend e o adapter de LLM estao implementados, mas so ficam
   homologados depois de uma validacao explicita com contas e credenciais reais.
 

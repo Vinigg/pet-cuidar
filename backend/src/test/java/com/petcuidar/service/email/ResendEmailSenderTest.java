@@ -5,6 +5,7 @@ import com.petcuidar.config.EmailProperties;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -18,6 +19,16 @@ class ResendEmailSenderTest {
     @AfterEach
     void encerrar() {
         if (server != null) server.stop(0);
+    }
+
+    @Test
+    void springIniciaAdaptadorQuandoResendEhSelecionado() {
+        new ApplicationContextRunner()
+                .withPropertyValues("email.provider=resend")
+                .withBean(EmailProperties.class)
+                .withBean(ObjectMapper.class)
+                .withUserConfiguration(ResendEmailSender.class, LocalEmailSender.class)
+                .run(contexto -> assertInstanceOf(ResendEmailSender.class, contexto.getBean(EmailSender.class)));
     }
 
     @Test
@@ -54,6 +65,25 @@ class ResendEmailSenderTest {
 
         assertTrue(erro.isTransitoria());
         assertEquals("Provedor de e-mail respondeu HTTP 429", erro.getMessage());
+    }
+
+    @Test
+    void timeoutDoProvedorEClassificadoComoTimeoutTransitorio() throws Exception {
+        java.net.http.HttpClient httpClient = org.mockito.Mockito.mock(java.net.http.HttpClient.class);
+        org.mockito.Mockito.when(httpClient.send(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.<java.net.http.HttpResponse.BodyHandler<Void>>any()))
+                .thenThrow(new java.net.http.HttpTimeoutException("request timed out"));
+        EmailProperties properties = new EmailProperties();
+        properties.getResend().setApiKey("chave-de-teste");
+        properties.getResend().setBaseUrl("http://localhost:1");
+        ResendEmailSender sender = new ResendEmailSender(properties, new ObjectMapper(), httpClient);
+
+        EmailDeliveryException erro = assertThrows(EmailDeliveryException.class,
+                () -> sender.enviar("ana@example.com", "Consulta", "Texto", "chave"));
+
+        assertTrue(erro.isTimeout());
+        assertTrue(erro.isTransitoria());
+        assertTrue(EmailDeliveryException.indicaTimeout(erro.getMessage()));
     }
 
     private ResendEmailSender sender() {

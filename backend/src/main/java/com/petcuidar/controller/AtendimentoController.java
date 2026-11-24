@@ -1,5 +1,8 @@
 package com.petcuidar.controller;
 
+import com.petcuidar.auth.Acesso;
+import com.petcuidar.auth.Permissao;
+import static com.petcuidar.auth.Perfil.VETERINARIO;
 import com.petcuidar.dto.AtualizacaoAtendimentoRequestDTO;
 import com.petcuidar.dto.AtendimentoResponseDTO;
 import com.petcuidar.dto.RegistroAtendimentoRequestDTO;
@@ -16,6 +19,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/atendimentos")
+@Permissao(VETERINARIO)
 public class AtendimentoController {
 
     private final AtendimentoService atendimentoService;
@@ -35,7 +39,12 @@ public class AtendimentoController {
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public AtendimentoResponseDTO registrar(@Valid @RequestBody RegistroAtendimentoRequestDTO request) {
+    public AtendimentoResponseDTO registrar(@Valid @RequestBody RegistroAtendimentoRequestDTO request,
+            @RequestAttribute(name = Acesso.ATRIBUTO, required = false) Acesso acesso) {
+        if (acesso != null) {
+            acesso.verificarConsulta(request.getConsultaId());
+            Acesso.exigir(acesso.conta().veterinarioId().equals(request.getVeterinarioId()));
+        }
         return atendimentoService.registrarAtendimento(request);
     }
 
@@ -49,7 +58,12 @@ public class AtendimentoController {
      * @return DTO com dados do atendimento atualizado
      */
     @PatchMapping
-    public AtendimentoResponseDTO atualizar(@Valid @RequestBody AtualizacaoAtendimentoRequestDTO request) {
+    public AtendimentoResponseDTO atualizar(@Valid @RequestBody AtualizacaoAtendimentoRequestDTO request,
+            @RequestAttribute(name = Acesso.ATRIBUTO, required = false) Acesso acesso) {
+        if (acesso != null) {
+            acesso.verificarAtendimento(request.getAtendimentoId());
+            Acesso.exigir(acesso.conta().veterinarioId().equals(request.getVeterinarioId()));
+        }
         return atendimentoService.atualizarAtendimento(request);
     }
 
@@ -63,7 +77,9 @@ public class AtendimentoController {
      * @return DTO com dados do atendimento
      */
     @GetMapping("/{id}")
-    public AtendimentoResponseDTO obter(@PathVariable Long id) {
+    public AtendimentoResponseDTO obter(@PathVariable Long id,
+            @RequestAttribute(name = Acesso.ATRIBUTO, required = false) Acesso acesso) {
+        if (acesso != null) acesso.verificarAtendimento(id);
         return atendimentoService.obterAtendimento(id);
     }
 
@@ -77,7 +93,12 @@ public class AtendimentoController {
      * @return Lista de DTOs dos atendimentos
      */
     @GetMapping("/pet/{petId}")
-    public List<AtendimentoResponseDTO> listarPorPet(@PathVariable Long petId) {
+    public List<AtendimentoResponseDTO> listarPorPet(@PathVariable Long petId,
+            @RequestAttribute(name = Acesso.ATRIBUTO, required = false) Acesso acesso) {
+        if (acesso != null) {
+            acesso.verificarPet(petId);
+            return atendimentoService.listarAtendimentosPorPet(petId, acesso.conta().veterinarioId());
+        }
         return atendimentoService.listarAtendimentosPorPet(petId);
     }
 }

@@ -1,56 +1,36 @@
 import React from 'react';
 
-export default function Navbar({ abaAtiva, setAbaAtiva, usuario, onLogout }) {
-    const abas = [
-        { id: 'painel', label: 'Painel do dia' },
-        { id: 'agenda-semanal', label: 'Agenda' },
-        { id: 'tutores-pets', label: 'Tutores e pets' },
-        { id: 'lembretes', label: 'Lembretes' },
-        { id: 'historico', label: 'Prontuário' },
-        { id: 'veterinarios', label: 'Veterinários' }
-    ];
-
+export default function Navbar({ abaAtiva, setAbaAtiva, usuario, abas = [], perfil, onLogout, saindo }) {
     return (
         <header className="navbar">
             <div className="navbar-brand">
-                <span className="navbar-paw">🐾</span>
+                <span className="navbar-paw" aria-hidden="true">🐾</span>
                 <div>
                     <span className="navbar-logo-text">Pet Cuidar</span>
-                    <span style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255, 255, 255, 0.75)', fontWeight: 600 }}>
-            Painel da Recepção
-          </span>
+                    <span className="user-role-subtitle" style={{ display: 'block', color: 'rgba(255,255,255,.75)' }}>
+                        {perfil}
+                    </span>
                 </div>
             </div>
-
-            <nav className="navbar-links">
-                {abas.map((item) => (
-                    <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setAbaAtiva && setAbaAtiva(item.id)}
-                        className={`navbar-tab ${abaAtiva === item.id ? 'active' : ''}`}
-                    >
-                        {item.label}
+            <nav className="navbar-links" aria-label={`Navegação de ${perfil}`}>
+                {abas.map(({ id, label }) => (
+                    <button key={id} type="button" onClick={() => setAbaAtiva(id)}
+                        className={`navbar-tab ${abaAtiva === id ? 'active' : ''}`}
+                        aria-current={abaAtiva === id ? 'page' : undefined}>
+                        {label}
                     </button>
                 ))}
             </nav>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#FFFFFF' }}>
-                    <div className="user-avatar-circle" style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)', color: '#FFFFFF' }}>
-                        🩺
-                    </div>
+            <div className="navbar-user-actions">
+                <div className="navbar-user-info">
+                    <div className="user-avatar-circle" aria-hidden="true">🩺</div>
                     <div className="user-meta-name">
-            <span className="user-name-title" style={{ color: '#FFFFFF' }}>
-              {usuario?.nome || 'Dra. Ana Souza'}
-            </span>
-                        <span className="user-role-subtitle" style={{ color: 'rgba(255, 255, 255, 0.75)' }}>
-              Recepção & Clínica
-            </span>
+                        <span className="user-name-title" style={{ color: '#fff' }}>{usuario?.nome || usuario?.email}</span>
+                        <span className="user-role-subtitle" style={{ color: 'rgba(255,255,255,.75)' }}>{perfil}</span>
                     </div>
                 </div>
-                <button type="button" onClick={onLogout} className="btn-logout">
-                    Sair
+                <button type="button" onClick={onLogout} disabled={saindo} className="btn-logout">
+                    {saindo ? 'Saindo…' : 'Sair'}
                 </button>
             </div>
         </header>

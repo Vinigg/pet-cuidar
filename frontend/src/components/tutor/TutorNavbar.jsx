@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function TutorNavbar({ abaTutor, setAbaTutor, usuario, onLogout }) {
+export default function TutorNavbar({ abaTutor, setAbaTutor, usuario, onLogout, saindo }) {
     return (
         <header className="tutor-navbar">
             <div className="navbar-brand">
@@ -39,15 +39,16 @@ export default function TutorNavbar({ abaTutor, setAbaTutor, usuario, onLogout }
 
             <div className="tutor-nav-user">
                 <div className="user-badge-profile">
-                    <div className="user-avatar-circle">{usuario?.nome ? usuario.nome.charAt(0) : 'M'}</div>
+                    <div className="user-avatar-circle">{usuario.nome.charAt(0)}</div>
                     <div className="user-meta-name">
-                        <span className="user-name-title">{usuario?.nome || 'Mariana Costa'}</span>
-                        <span className="user-role-subtitle">Tutora</span>
+                        <span className="user-name-title">{usuario.nome}</span>
+                        <span className="user-role-subtitle">Tutor</span>
                     </div>
                 </div>
                 <button
                     type="button"
                     onClick={onLogout}
+                    disabled={saindo}
                     className="btn-logout"
                     style={{ color: 'var(--color-neutral-dark)', borderColor: 'var(--color-neutral-border)' }}
                 >

@@ -1,5 +1,8 @@
 package com.petcuidar.controller;
 
+import com.petcuidar.auth.Perfil;
+import com.petcuidar.auth.SessaoTeste;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.petcuidar.dto.PetCadastroDTO;
@@ -39,6 +42,7 @@ class TutorCadastroIntegrationTest {
     }
 
     @Autowired MockMvc mvc;
+    @Autowired JdbcTemplate banco;
     @Autowired ObjectMapper mapper;
     @Autowired TutorRepository tutores;
     @Autowired PetRepository pets;
@@ -46,6 +50,8 @@ class TutorCadastroIntegrationTest {
 
     @BeforeEach
     void limparCadastros() {
+        banco.update("DELETE FROM credenciais_auth WHERE conta_id IN (SELECT id FROM contas WHERE perfil = 'TUTOR')");
+        banco.update("DELETE FROM contas WHERE perfil = 'TUTOR'");
         pets.deleteAll();
         tutores.deleteAll();
     }
@@ -63,7 +69,7 @@ class TutorCadastroIntegrationTest {
 
     @Test
     void cadastraTutorComDoisPetsERetornaIdsSemCiclo() throws Exception {
-        var resultado = mvc.perform(post("/tutores").contentType(APPLICATION_JSON)
+        var resultado = mvc.perform(post("/tutores").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR)).contentType(APPLICATION_JSON)
                         .content(cadastro("arthur@example.com", "12345678900").toString()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNumber())
@@ -103,7 +109,7 @@ class TutorCadastroIntegrationTest {
             case "alergias" -> pet.put("alergiasCriticas", "a".repeat(1001));
             default -> throw new IllegalArgumentException(caso);
         }
-        mvc.perform(post("/tutores").contentType(APPLICATION_JSON).content(node.toString()))
+        mvc.perform(post("/tutores").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR)).contentType(APPLICATION_JSON).content(node.toString()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.mensagem").isNotEmpty());
@@ -113,7 +119,7 @@ class TutorCadastroIntegrationTest {
 
     @Test
     void rejeitaJsonMalformado() throws Exception {
-        mvc.perform(post("/tutores").contentType(APPLICATION_JSON).content("{"))
+        mvc.perform(post("/tutores").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR)).contentType(APPLICATION_JSON).content("{"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
         assertEquals(0, tutores.count());
@@ -122,12 +128,12 @@ class TutorCadastroIntegrationTest {
     @ParameterizedTest
     @ValueSource(strings = {"email", "cpf"})
     void duplicidadeRetorna409SemCriarNovosPets(String campo) throws Exception {
-        mvc.perform(post("/tutores").contentType(APPLICATION_JSON)
+        mvc.perform(post("/tutores").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR)).contentType(APPLICATION_JSON)
                         .content(cadastro("arthur@example.com", "12345678900").toString()))
                 .andExpect(status().isCreated());
         var segundo = cadastro(campo.equals("email") ? "arthur@example.com" : "outro@example.com",
                 campo.equals("cpf") ? "12345678900" : "98765432100");
-        mvc.perform(post("/tutores").contentType(APPLICATION_JSON).content(segundo.toString()))
+        mvc.perform(post("/tutores").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR)).contentType(APPLICATION_JSON).content(segundo.toString()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.mensagem").value(campo.equals("email")
@@ -140,7 +146,7 @@ class TutorCadastroIntegrationTest {
     void permiteMultiplosTutoresSemCpf() throws Exception {
         String[] cpfs = {"", "   ", null};
         for (int i = 0; i < cpfs.length; i++) {
-            mvc.perform(post("/tutores").contentType(APPLICATION_JSON)
+            mvc.perform(post("/tutores").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR)).contentType(APPLICATION_JSON)
                             .content(cadastro("tutor" + i + "@example.com", cpfs[i]).toString()))
                     .andExpect(status().isCreated());
         }

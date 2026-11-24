@@ -1,49 +1,53 @@
 package com.petcuidar.service;
 
-import com.petcuidar.dto.ResumoHistoricoDTO;
+import com.petcuidar.dto.PetCadastroDTO;
 import com.petcuidar.dto.PetOpcaoDTO;
+import com.petcuidar.dto.PetResponseDTO;
 import com.petcuidar.exception.RecursoNaoEncontradoException;
-import com.petcuidar.model.HistoricoAtendimento;
 import com.petcuidar.model.Pet;
-import com.petcuidar.repository.HistoricoAtendimentoRepository;
 import com.petcuidar.repository.PetRepository;
-import com.petcuidar.service.ia.ResumoHistoricoService;
+import com.petcuidar.repository.TutorRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
 public class PetService {
+    private final PetRepository pets;
+    private final TutorRepository tutores;
 
-    private final PetRepository petRepository;
-    private final HistoricoAtendimentoRepository historicoRepository;
-    private final ResumoHistoricoService resumoHistoricoService;
-
-    public PetService(PetRepository petRepository,
-                       HistoricoAtendimentoRepository historicoRepository,
-                       ResumoHistoricoService resumoHistoricoService) {
-        this.petRepository = petRepository;
-        this.historicoRepository = historicoRepository;
-        this.resumoHistoricoService = resumoHistoricoService;
+    public PetService(PetRepository pets, TutorRepository tutores) {
+        this.pets = pets;
+        this.tutores = tutores;
     }
 
     public List<PetOpcaoDTO> listarOpcoes(Long tutorId) {
-        return petRepository.listarOpcoes(tutorId);
+        return pets.listarOpcoes(tutorId);
     }
 
-    public List<HistoricoAtendimento> listarHistorico(Long petId) {
-        buscarPet(petId);
-        return historicoRepository.findByPetIdOrderByDataDesc(petId);
+    public List<PetOpcaoDTO> listarOpcoesVeterinario(Long veterinarioId) {
+        return pets.listarOpcoesVeterinario(veterinarioId);
     }
 
-    public ResumoHistoricoDTO obterResumo(Long petId) {
-        Pet pet = buscarPet(petId);
-        List<HistoricoAtendimento> historico = historicoRepository.findByPetIdOrderByDataDesc(petId);
-        return resumoHistoricoService.gerar(pet, historico);
+    public List<PetResponseDTO> listarDoTutor(Long tutorId) {
+        return pets.findByTutorIdOrderByNomeAsc(tutorId).stream().map(PetService::resposta).toList();
     }
 
-    private Pet buscarPet(Long id) {
-        return petRepository.findById(id)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Pet nao encontrado: id " + id));
+    @Transactional
+    public PetResponseDTO cadastrar(Long tutorId, PetCadastroDTO dados) {
+        var tutor = tutores.findById(tutorId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Tutor não encontrado."));
+        var pet = new Pet();
+        pet.setTutor(tutor);
+        pet.setNome(dados.getNome());
+        pet.setEspecie(dados.getEspecie());
+        pet.setIdade(dados.getIdade());
+        pet.setAlergiasCriticas(dados.getAlergiasCriticas());
+        return resposta(pets.save(pet));
+    }
+
+    private static PetResponseDTO resposta(Pet pet) {
+        return new PetResponseDTO(pet.getId(), pet.getNome(), pet.getEspecie(), pet.getIdade(), pet.getAlergiasCriticas());
     }
 }

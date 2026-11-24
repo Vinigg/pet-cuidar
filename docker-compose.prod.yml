@@ -1,0 +1,27 @@
+# Deploy em uma unica EC2: docker compose -f docker-compose.prod.yml up -d --build
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file: deploy/.env.prod
+    environment:
+      NOSHOW_PREDICTOR_BASE_URL: http://predictor:8000
+    volumes:
+      - petcuidar-data:/data
+    depends_on:
+      - predictor
+    restart: unless-stopped
+
+  predictor:
+    build: ./microservico-predicao
+    restart: unless-stopped
+
+volumes:
+  petcuidar-data:

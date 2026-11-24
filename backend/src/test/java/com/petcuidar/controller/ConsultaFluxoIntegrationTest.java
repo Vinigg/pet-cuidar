@@ -1,5 +1,8 @@
 package com.petcuidar.controller;
 
+import com.petcuidar.auth.Perfil;
+import com.petcuidar.auth.SessaoTeste;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.petcuidar.model.*;
 import com.petcuidar.repository.*;
@@ -47,6 +50,7 @@ class ConsultaFluxoIntegrationTest {
     }
 
     @Autowired MockMvc mvc;
+    @Autowired JdbcTemplate banco;
     @Autowired ObjectMapper mapper;
     @Autowired ConsultaService consultaService;
     @Autowired ConsultaRepository consultas;
@@ -96,11 +100,11 @@ class ConsultaFluxoIntegrationTest {
     private Consulta recarregar(Consulta c) { return consultas.findById(c.getId()).orElseThrow(); }
 
     private ResultActions patchStatus(Object id, String corpo) throws Exception {
-        return mvc.perform(patch("/consultas/" + id + "/status").contentType(APPLICATION_JSON).content(corpo));
+        return mvc.perform(patch("/consultas/" + id + "/status").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR)).contentType(APPLICATION_JSON).content(corpo));
     }
 
     private ResultActions reagendar(Object id, String corpo) throws Exception {
-        return mvc.perform(patch("/consultas/" + id + "/reagendamento").contentType(APPLICATION_JSON).content(corpo));
+        return mvc.perform(patch("/consultas/" + id + "/reagendamento").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR)).contentType(APPLICATION_JSON).content(corpo));
     }
 
     private static String corpoStatus(String s) { return "{\"status\":\"" + s + "\"}"; }
@@ -164,7 +168,7 @@ class ConsultaFluxoIntegrationTest {
 
         String novoAgendamento = "{\"petId\":" + pet.getId() + ",\"veterinarioId\":" + vet.getId()
                 + ",\"dataHora\":\"" + horario + "\"}";
-        mvc.perform(post("/consultas").contentType(APPLICATION_JSON).content(novoAgendamento))
+        mvc.perform(post("/consultas").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR)).contentType(APPLICATION_JSON).content(novoAgendamento))
                 .andExpect(status().isCreated());
     }
 
@@ -188,14 +192,14 @@ class ConsultaFluxoIntegrationTest {
     @Test
     void lembreteDeConsultaCanceladaRetorna409() throws Exception {
         Consulta ativa = consulta(DIA.atTime(9, 0));
-        mvc.perform(post("/consultas/" + ativa.getId() + "/lembrete"))
+        mvc.perform(post("/consultas/" + ativa.getId() + "/lembrete").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ENVIADO"))
                 .andExpect(jsonPath("$.textoEnviado").value(org.hamcrest.Matchers.containsString("Rex")));
 
         Consulta cancelada = consulta(DIA.atTime(9, 30));
         patchStatus(cancelada.getId(), corpoStatus("CANCELADA")).andExpect(status().isOk());
-        mvc.perform(post("/consultas/" + cancelada.getId() + "/lembrete"))
+        mvc.perform(post("/consultas/" + cancelada.getId() + "/lembrete").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR)))
                 .andExpect(status().isConflict());
         assertTrue(lembretes.findByConsultaId(cancelada.getId()).isEmpty());
     }
@@ -278,7 +282,7 @@ class ConsultaFluxoIntegrationTest {
     @Test
     void reagendamentoReabreLembreteParaONovoHorario() throws Exception {
         Consulta c = consulta(DIA.atTime(10, 0));
-        mvc.perform(post("/consultas/" + c.getId() + "/lembrete")).andExpect(status().isOk());
+        mvc.perform(post("/consultas/" + c.getId() + "/lembrete").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR))).andExpect(status().isOk());
 
         LocalDateTime novo = DIA.plusDays(2).atTime(8, 30);
         reagendar(c.getId(), dataHora(novo)).andExpect(status().isOk());
@@ -288,7 +292,7 @@ class ConsultaFluxoIntegrationTest {
         assertNull(reaberto.getDataEnvio());
 
         String dataNova = novo.toLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-        mvc.perform(post("/consultas/" + c.getId() + "/lembrete"))
+        mvc.perform(post("/consultas/" + c.getId() + "/lembrete").with(SessaoTeste.assumir(banco, Perfil.COLABORADOR)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.textoEnviado").value(org.hamcrest.Matchers.containsString(dataNova + " às 08:30")));
     }

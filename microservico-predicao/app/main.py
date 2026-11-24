@@ -22,22 +22,28 @@ from app.explicacao import categorizar, montar_motivo
 
 MODEL_PATH = os.getenv("MODEL_PATH", "model/modelo_noshow.joblib")
 
-app = FastAPI(title="Pet Cuidar - Microservico de Predicao de No-show", version="1.0.0")
 
-def _carregar_modelo():
-    if os.path.exists(MODEL_PATH):
-        return joblib.load(MODEL_PATH)
-    return None
+def _carregar_modelo(caminho=None):
+    """Carrega o modelo treinado ou falha com uma mensagem clara.
+
+    Sem modelo o servico NAO sobe: devolver uma heuristica com cara de score do
+    modelo enganaria a recepcionista. Se o servico estiver fora, o back-end ja
+    responde "score indisponivel" (categoria INDISPONIVEL), que e honesto.
+    """
+    caminho = caminho or MODEL_PATH
+    if not os.path.exists(caminho):
+        raise RuntimeError(
+            f"Modelo de no-show nao encontrado em '{caminho}'. "
+            "Inclua model/modelo_noshow.joblib na imagem/instancia "
+            "ou defina MODEL_PATH."
+        )
+    return joblib.load(caminho)
 
 
-_model = _carregar_modelo()  # carregado ja na importacao
+_model = _carregar_modelo()  # carregado ja na importacao: falha cedo no deploy
 
 
-@app.on_event("startup")
-def recarregar_modelo():
-    global _model
-    if _model is None:
-        _model = _carregar_modelo()
+app = FastAPI(title="Pet Cuidar - Microservico de Predicao de No-show", version="1.1.0")
 
 
 # ---- Contrato de ENTRADA (o que o back-end Java envia) ----
@@ -62,7 +68,7 @@ class PredicaoResponse(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "modelo_carregado": _model is not None}
+    return {"status": "ok", "modelo_carregado": True}
 
 
 @app.post("/predict", response_model=PredicaoResponse)
@@ -74,13 +80,9 @@ def predict(req: PredicaoRequest):
         if dados["consultas_anteriores"] > 0 else 0.0
     )
 
-    if _model is None:
-        # fallback deterministico se o modelo nao estiver disponivel
-        score = round(dados["taxa_faltas"], 2)
-    else:
-        features = _model["features"]
-        X = pd.DataFrame([{f: dados[f] for f in features}])
-        score = round(float(_model["pipeline"].predict_proba(X)[:, 1][0]), 2)
+    features = _model["features"]
+    X = pd.DataFrame([{f: dados[f] for f in features}])
+    score = round(float(_model["pipeline"].predict_proba(X)[:, 1][0]), 2)
 
     return PredicaoResponse(
         score=score,
