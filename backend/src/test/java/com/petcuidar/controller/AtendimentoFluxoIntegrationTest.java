@@ -19,9 +19,11 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
@@ -139,6 +141,59 @@ class AtendimentoFluxoIntegrationTest {
         assertEquals(0, historicos.count());
     }
 
+    @Test
+    void atendimentoRetroativoUsaDataHoraDaConsulta() throws Exception {
+        LocalDateTime horario = LocalDate.now().minusDays(1).atTime(9, 45, 15);
+        Consulta c = consulta(pet, horario);
+
+        registrar(pet.getId(), c.getId())
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.dataAtendimento").value(horario.toString()));
+
+        assertEquals(horario, historicos.findAll().get(0).getData());
+        System.out.println("PASS C6 prontuário usa data e hora da consulta");
+    }
+
+    @Test
+    void atendimentoRetroativoMantemInstanteDaAuditoria() throws Exception {
+        Consulta c = consulta(pet, LocalDate.now().minusDays(1).atTime(10, 30));
+        LocalDateTime antesDaGravacao = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+
+        registrar(pet.getId(), c.getId()).andExpect(status().isCreated());
+
+        LocalDateTime depoisDaGravacao = LocalDateTime.now();
+        HistoricoAtendimento atendimento = historicos.findAll().get(0);
+        assertFalse(atendimento.getDataCriacao().isBefore(antesDaGravacao));
+        assertFalse(atendimento.getDataAtualizacao().isBefore(atendimento.getDataCriacao()));
+        assertFalse(atendimento.getDataAtualizacao().isAfter(depoisDaGravacao));
+        System.out.println("PASS C7 auditoria usa o horário real da gravação");
+    }
+
+    @Test
+    void nenhumRegistroParaConsultaCanceladaOuComNaoComparecimento() throws Exception {
+        Consulta cancelada = consulta(pet);
+        Consulta faltou = consulta(pet, LocalDate.now().minusDays(1).atTime(13, 30));
+
+        encerrarConsulta(cancelada, StatusConsulta.CANCELADA);
+        encerrarConsulta(faltou, StatusConsulta.NAO_COMPARECEU);
+
+        registrar(pet.getId(), cancelada.getId()).andExpect(status().isConflict());
+        registrar(pet.getId(), faltou.getId()).andExpect(status().isConflict());
+
+        assertEquals(StatusConsulta.CANCELADA, recarregar(cancelada).getStatus());
+        assertEquals(StatusConsulta.NAO_COMPARECEU, recarregar(faltou).getStatus());
+        assertEquals(0, historicos.count());
+        System.out.println("PASS C8 cancelada e não compareceu impedem o registro");
+    }
+
+    private void encerrarConsulta(Consulta consulta, StatusConsulta status) throws Exception {
+        mvc.perform(patch("/consultas/" + consulta.getId() + "/status")
+                .with(SessaoTeste.assumir(banco, Perfil.COLABORADOR))
+                .contentType(APPLICATION_JSON)
+                .content("{\"status\":\"" + status + "\"}"))
+                .andExpect(status().isOk());
+    }
+
     private ResultActions registrar(Long petId, Long consultaId) throws Exception {
         String corpo = "{\"petId\":" + petId + ",\"consultaId\":" + consultaId + ",\"veterinarioId\":" + vet.getId()
                 + ",\"descricaoClinica\":\"Otite leve, tratamento topico prescrito.\"}";
@@ -153,10 +208,14 @@ class AtendimentoFluxoIntegrationTest {
     }
 
     private Consulta consulta(Pet dono) {
+        return consulta(dono, DATA_HORA);
+    }
+
+    private Consulta consulta(Pet dono, LocalDateTime horario) {
         Consulta c = new Consulta();
         c.setPet(dono);
         c.setVeterinario(vet);
-        c.setDataHora(DATA_HORA);
+        c.setDataHora(horario);
         return consultas.save(c);
     }
 

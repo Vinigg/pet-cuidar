@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -99,7 +98,7 @@ public class AtendimentoService {
         atendimento.setConsulta(consulta);
         atendimento.setVeterinario(veterinario);
         atendimento.setDescricao(request.getDescricaoClinica());
-        atendimento.setData(LocalDateTime.now());
+        atendimento.setData(consulta.getDataHora());
         atendimento.setVeterinarioCriacaoId(veterinario.getId());
         atendimento.setVeterinarioAtualizacaoId(veterinario.getId());
 
