@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,6 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -186,6 +188,92 @@ class AtendimentoFluxoIntegrationTest {
         System.out.println("PASS C8 cancelada e não compareceu impedem o registro");
     }
 
+    @Test
+    void agendaPorDataRestringeVeterinarioEOrdenaPeloHorario() throws Exception {
+        LocalDate dia = LocalDate.now().minusDays(2);
+        Pet segundoPaciente = novoPet("Mel", pet.getTutor());
+        LocalDateTime horarioMaisTarde = dia.atTime(14, 45, 15);
+        LocalDateTime horarioMaisCedo = dia.atTime(8, 30, 15);
+        Consulta segunda = consulta(segundoPaciente, horarioMaisTarde);
+        Consulta primeira = consulta(pet, horarioMaisCedo);
+        consulta(pet, dia.minusDays(1).atTime(8, 30));
+        consulta(segundoPaciente, dia.plusDays(1).atTime(9, 30));
+
+        Veterinario outroVeterinario = new Veterinario();
+        outroVeterinario.setNome("Outro veterinário");
+        Consulta externa = new Consulta();
+        externa.setVeterinario(veterinarios.save(outroVeterinario));
+        externa.setPet(pet);
+        externa.setDataHora(dia.atTime(10, 30));
+        consultas.save(externa);
+
+        mvc.perform(get("/consultas").param("data", dia.toString())
+                        .with(SessaoTeste.assumir(banco, Perfil.VETERINARIO, vet.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(primeira.getId()))
+                .andExpect(jsonPath("$[0].dataHora").value(horarioMaisCedo.toString()))
+                .andExpect(jsonPath("$[0].petNome").value(pet.getNome()))
+                .andExpect(jsonPath("$[0].status").value("AGENDADA"))
+                .andExpect(jsonPath("$[1].id").value(segunda.getId()))
+                .andExpect(jsonPath("$[1].dataHora").value(horarioMaisTarde.toString()))
+                .andExpect(jsonPath("$[1].petNome").value(segundoPaciente.getNome()))
+                .andExpect(jsonPath("$[1].status").value("AGENDADA"));
+        System.out.println("PASS C3 API lista o dia e o veterinário em ordem de horário");
+    }
+
+    @Test
+    void cadastroRetroativoPersisteUmRegistroComOsVinculosDaConsulta() throws Exception {
+        LocalDateTime horario = LocalDate.now().minusDays(3).atTime(13, 15);
+        Consulta escolhida = consulta(pet, horario);
+        consulta(pet, horario.plusHours(1));
+        String anotacao = "Descrição clínica da consulta retroativa.";
+
+        registrar(pet.getId(), escolhida.getId(), anotacao)
+                .andExpect(status().isCreated());
+
+        List<HistoricoAtendimento> registros = historicos.findAll();
+        assertEquals(1, registros.size());
+        HistoricoAtendimento registro = registros.get(0);
+        assertEquals(escolhida.getId(), registro.getConsulta().getId());
+        assertEquals(pet.getId(), registro.getPet().getId());
+        assertEquals(vet.getId(), registro.getVeterinario().getId());
+        assertEquals(anotacao, registro.getDescricao());
+        System.out.println("PASS C5 grava descrição e vínculos de uma consulta passada");
+    }
+
+    @Test
+    void atualizacaoRetroativaAlteraSomenteORegistroEscolhido() throws Exception {
+        LocalDateTime dia = LocalDate.now().minusDays(3).atTime(9, 30);
+        Consulta escolhida = consulta(pet, dia);
+        Consulta outra = consulta(pet, dia.minusDays(1));
+        registrar(pet.getId(), escolhida.getId(), "Descrição inicial da consulta escolhida.").andExpect(status().isCreated());
+        registrar(pet.getId(), escolhida.getId(), "Complemento da mesma consulta.").andExpect(status().isCreated());
+        registrar(pet.getId(), outra.getId(), "Descrição de outra consulta do pet.").andExpect(status().isCreated());
+        List<HistoricoAtendimento> originais = historicos.findAll();
+        HistoricoAtendimento alvo = originais.stream()
+                .filter(registro -> registro.getDescricao().equals("Complemento da mesma consulta."))
+                .findFirst().orElseThrow();
+
+        String descricao = "Complemento com a descrição revisada.";
+        String corpo = """
+                {"atendimentoId":%d,"veterinarioId":%d,"descricaoClinica":"%s"}
+                """.formatted(alvo.getId(), vet.getId(), descricao);
+        mvc.perform(patch("/atendimentos").with(SessaoTeste.assumir(banco, Perfil.VETERINARIO, vet.getId()))
+                        .contentType(APPLICATION_JSON).content(corpo))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(alvo.getId()));
+
+        assertEquals(3, historicos.count());
+        for (HistoricoAtendimento original : originais) {
+            HistoricoAtendimento atual = historicos.findById(original.getId()).orElseThrow();
+            assertEquals(original.getConsulta().getId(), atual.getConsulta().getId());
+            assertEquals(original.getData(), atual.getData());
+            assertEquals(original.getId().equals(alvo.getId()) ? descricao : original.getDescricao(), atual.getDescricao());
+        }
+        System.out.println("PASS C11 altera somente a descrição do registro escolhido");
+    }
+
     private void encerrarConsulta(Consulta consulta, StatusConsulta status) throws Exception {
         mvc.perform(patch("/consultas/" + consulta.getId() + "/status")
                 .with(SessaoTeste.assumir(banco, Perfil.COLABORADOR))
@@ -195,9 +283,15 @@ class AtendimentoFluxoIntegrationTest {
     }
 
     private ResultActions registrar(Long petId, Long consultaId) throws Exception {
-        String corpo = "{\"petId\":" + petId + ",\"consultaId\":" + consultaId + ",\"veterinarioId\":" + vet.getId()
-                + ",\"descricaoClinica\":\"Otite leve, tratamento topico prescrito.\"}";
-        return mvc.perform(post("/atendimentos").with(SessaoTeste.assumir(banco, Perfil.VETERINARIO, vet.getId())).contentType(APPLICATION_JSON).content(corpo));
+        return registrar(petId, consultaId, "Otite leve, tratamento topico prescrito.");
+    }
+
+    private ResultActions registrar(Long petId, Long consultaId, String descricao) throws Exception {
+        String corpo = """
+                {"petId":%d,"consultaId":%d,"veterinarioId":%d,"descricaoClinica":"%s"}
+                """.formatted(petId, consultaId, vet.getId(), descricao);
+        return mvc.perform(post("/atendimentos").with(SessaoTeste.assumir(banco, Perfil.VETERINARIO, vet.getId()))
+                .contentType(APPLICATION_JSON).content(corpo));
     }
 
     private Pet novoPet(String nome, Tutor tutor) {

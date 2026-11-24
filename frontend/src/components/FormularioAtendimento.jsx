@@ -105,8 +105,9 @@ export default function FormularioAtendimento({ conta }) {
     setMensagemSucesso('');
   };
 
-  const mudarData = (novaData) => {
-    if (novaData > dataLocal() || novaData === dataSelecionada) return;
+  const mudarData = (evento) => {
+    const { value: novaData, validity } = evento.currentTarget;
+    if (validity.rangeOverflow || novaData === dataSelecionada) return;
     mudarConsulta('');
     setDataSelecionada(novaData);
     setConsultas([]);
@@ -208,7 +209,7 @@ export default function FormularioAtendimento({ conta }) {
               <label className="input-label" htmlFor="data-consulta">Data da consulta</label>
               <input id="data-consulta" className="select-custom" type="date"
                 value={dataSelecionada} max={dataLocal()} disabled={salvando}
-                onChange={(e) => mudarData(e.target.value)} />
+                onChange={mudarData} />
             </div>
 
             <div className="form-group">

@@ -3,12 +3,12 @@ import { createRoot } from "react-dom/client";
 import { Simulate } from "react-dom/test-utils";
 import FormularioAtendimento from "./FormularioAtendimento";
 import {
-  atualizarAtendimento, registrarAtendimento, listarAtendimentosPorPet, listarPets, listarVeterinarios, listarConsultasDoDia,
+  atualizarAtendimento, registrarAtendimento, listarAtendimentosPorPet, listarConsultasDoDia,
 } from "../api/api";
 
 jest.mock("../api/api", () => ({
-  registrarAtendimento: jest.fn(), atualizarAtendimento: jest.fn(), obterAtendimento: jest.fn(),
-  listarAtendimentosPorPet: jest.fn(), listarPets: jest.fn(), listarVeterinarios: jest.fn(),
+  registrarAtendimento: jest.fn(), atualizarAtendimento: jest.fn(),
+  listarAtendimentosPorPet: jest.fn(),
   listarConsultasDoDia: jest.fn(),
 }));
 
@@ -19,8 +19,6 @@ beforeEach(() => {
   jest.resetAllMocks();
   jest.useFakeTimers();
   jest.setSystemTime(new Date(2026, 10, 24, 23, 30));
-  listarPets.mockResolvedValue({ data: [{ id: 1, nome: "Rex" }] });
-  listarVeterinarios.mockResolvedValue({ data: [{ id: 3, nome: "Bia" }] });
   listarConsultasDoDia.mockResolvedValue({
     data: [{ id: 2, petId: 1, veterinarioId: 3, petNome: "Rex", dataHora: "2026-11-11T10:00:00", status: "CANCELADA" }],
   });
@@ -36,7 +34,15 @@ afterEach(() => {
 });
 
 const selecionar = async (seletor, valor) => {
-  await act(async () => Simulate.change(container.querySelector(seletor), { target: { value: valor } }));
+  const campo = container.querySelector(seletor);
+  await act(async () => {
+    if (campo.type === "date") {
+      campo.value = valor;
+      Simulate.change(campo);
+    } else {
+      Simulate.change(campo, { target: { value: valor } });
+    }
+  });
 };
 
 const preencherERegistrar = async () => {
@@ -91,8 +97,12 @@ const consultaNaData = (id, data, campos = {}) => ({
 
 const aguardarResposta = () => {
   let resolver;
-  const promessa = new Promise((resolve) => { resolver = resolve; });
-  return { promessa, resolver };
+  let rejeitar;
+  const promessa = new Promise((resolve, reject) => {
+    resolver = resolve;
+    rejeitar = reject;
+  });
+  return { promessa, resolver, rejeitar };
 };
 
 test("C1 abre com a data local de hoje", async () => {
@@ -108,10 +118,12 @@ test("C2 impede selecionar uma data futura", async () => {
 
   const campoData = container.querySelector("#data-consulta");
   expect(campoData.max).toBe("2026-11-24");
-  await selecionar("#data-consulta", "2026-11-25");
-  expect(campoData.value).toBe("2026-11-24");
-  expect(valoresDasOpcoes("#consulta")).toEqual(["2"]);
-  expect(listarConsultasDoDia).not.toHaveBeenCalledWith("2026-11-25");
+  for (const futuro of ["2026-11-25", "10000-01-01"]) {
+    await selecionar("#data-consulta", futuro);
+    expect(campoData.value).toBe("2026-11-24");
+    expect(valoresDasOpcoes("#consulta")).toEqual(["2"]);
+    expect(listarConsultasDoDia).not.toHaveBeenCalledWith(futuro);
+  }
 });
 
 test("C4 trocar o dia limpa a consulta e a descrição", async () => {
@@ -166,7 +178,10 @@ test("uma agenda anterior não é restaurada por resposta atrasada", async () =>
 
 test("C16 indica carregamento e desabilita a seleção de consultas", async () => {
   const agenda = aguardarResposta();
-  listarConsultasDoDia.mockImplementationOnce(() => agenda.promessa);
+  const recarga = aguardarResposta();
+  listarConsultasDoDia.mockImplementationOnce(() => agenda.promessa)
+    .mockImplementationOnce(() => recarga.promessa);
+  registrarAtendimento.mockResolvedValue({ data: { id: 9 } });
   await abrirFormulario();
 
   expect(container.querySelector('[role="status"]').textContent).toContain("Carregando consultas");
@@ -174,6 +189,21 @@ test("C16 indica carregamento e desabilita a seleção de consultas", async () =
 
   await act(async () => agenda.resolver({ data: [consultaNaData(2, "2026-11-24")] }));
   expect(container.querySelector('[role="status"]')).toBeNull();
+  expect(container.querySelector("#consulta").disabled).toBe(false);
+
+  await selecionar("#consulta", "2");
+  await selecionar("textarea", "Descrição clínica para testar a recarga.");
+  await act(async () => Simulate.submit(container.querySelector("form")));
+
+  expect(container.textContent).toContain("Carregando consultas…");
+  expect(valoresDasOpcoes("#consulta")).toEqual(["2"]);
+  expect(container.querySelector("#consulta").disabled).toBe(true);
+
+  await act(async () => recarga.resolver({
+    data: [consultaNaData(2, "2026-11-24", { status: "REALIZADA" })],
+  }));
+  expect(container.textContent).not.toContain("Carregando consultas…");
+  expect(container.querySelector('#consulta option[value="2"]').textContent).toContain("Realizada");
   expect(container.querySelector("#consulta").disabled).toBe(false);
 });
 
@@ -208,6 +238,7 @@ test("C5 registra uma consulta passada com os vínculos da seleção", async () 
 
   await act(async () => Simulate.submit(container.querySelector("form")));
 
+  expect(registrarAtendimento).toHaveBeenCalledTimes(1);
   expect(registrarAtendimento).toHaveBeenCalledWith({
     petId: 5, consultaId: 7, veterinarioId: 3, descricaoClinica: "Paciente tratado para otite.",
   });
@@ -217,7 +248,7 @@ test("C5 registra uma consulta passada com os vínculos da seleção", async () 
 
 const registroClinico = (id, consultaId, descricaoClinica) => ({
   id, consultaId, descricaoClinica,
-  dataAtendimento: "2026-11-24T14:00:00",
+  dataAtendimento: "2026-11-23T09:00:00",
   dataCriacao: "2026-11-24T14:00:00",
   dataAtualizacao: "2026-11-24T14:00:00",
   veterinarioNome: "Dra. Bia",
@@ -237,9 +268,9 @@ const selecionarModoAtualizar = async () => {
 
 const abrirAtualizacaoDeConsultaPassada = async (registros = registrosDaConsulta) => {
   listarConsultasDoDia.mockImplementation(async (data) => ({
-    data: data === "2026-11-23" ? [consultaNaData(7, data, { status: "REALIZADA" })] : [],
+    data: data === "2026-11-23" ? [consultaNaData(7, data, { petId: 17, status: "REALIZADA" })] : [],
   }));
-  listarAtendimentosPorPet.mockResolvedValue({ data: registros });
+  listarAtendimentosPorPet.mockImplementation(async (petId) => ({ data: petId === 17 ? registros : [] }));
   await abrirFormulario();
   await selecionarModoAtualizar();
   await selecionar("#data-consulta", "2026-11-23");
@@ -249,6 +280,7 @@ const abrirAtualizacaoDeConsultaPassada = async (registros = registrosDaConsulta
 test("C9 lista registros vinculados à consulta selecionada", async () => {
   await abrirAtualizacaoDeConsultaPassada();
 
+  expect(listarAtendimentosPorPet).toHaveBeenCalledWith(17);
   expect(valoresDasOpcoes("#atendimento")).toEqual(["21", "23"]);
   expect(container.querySelector('#atendimento option[value="21"]').textContent)
     .toContain("Descrição original do prontuário antigo.");
@@ -283,7 +315,7 @@ test("C11 atualiza somente o registro selecionado", async () => {
   expect(container.querySelector("#consulta").value).toBe("7");
 });
 
-test("C14 respostas antigas preservam a seleção mais recente", async () => {
+test.each(["sucesso", "falha"])("C14 respostas antigas preservam a seleção mais recente (%s)", async (tipo) => {
   const agendaAnterior = aguardarResposta();
   const registrosAnteriores = aguardarResposta();
   listarConsultasDoDia.mockImplementationOnce(() => agendaAnterior.promessa)
@@ -302,8 +334,13 @@ test("C14 respostas antigas preservam a seleção mais recente", async () => {
   await selecionar("#atendimento", "21");
 
   await act(async () => {
-    agendaAnterior.resolver({ data: [consultaNaData(2, "2026-11-24")] });
-    registrosAnteriores.resolver({ data: [registroClinico(22, 8, "Resposta clínica antiga.")] });
+    if (tipo === "falha") {
+      agendaAnterior.rejeitar(new Error("Agenda anterior indisponível"));
+      registrosAnteriores.rejeitar(new Error("Histórico anterior indisponível"));
+    } else {
+      agendaAnterior.resolver({ data: [consultaNaData(2, "2026-11-24")] });
+      registrosAnteriores.resolver({ data: [registroClinico(22, 8, "Resposta clínica antiga.")] });
+    }
   });
 
   expect(valoresDasOpcoes("#consulta")).toEqual(["8", "7"]);
@@ -311,6 +348,18 @@ test("C14 respostas antigas preservam a seleção mais recente", async () => {
   expect(valoresDasOpcoes("#atendimento")).toEqual(["21", "23"]);
   expect(container.querySelector("#atendimento").value).toBe("21");
   expect(container.querySelector("textarea").value).toBe(registrosDaConsulta[0].descricaoClinica);
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+
+test("C17 exibe separadamente o horário clínico e a criação", async () => {
+  await abrirAtualizacaoDeConsultaPassada([registrosDaConsulta[0]]);
+
+  const dataClinica = container.querySelector(".atendimento-data").textContent;
+  const auditoria = container.querySelector(".atendimento-auditoria").textContent;
+  expect(dataClinica).toContain("23/11/2026");
+  expect(dataClinica).toContain("09:00");
+  expect(auditoria).toContain("24/11/2026");
+  expect(auditoria).toContain("14:00");
 });
 
 test("C15 informa quando a consulta não tem atendimento", async () => {
