@@ -45,16 +45,39 @@ export default function Login({ finalidade, onVerificado, onAlternar, erroSessao
         <div className="login-page-wrapper">
             <div className="login-card-container">
                 <aside className="login-left-banner">
-                    <div className="navbar-brand">
-                        <span className="navbar-paw" aria-hidden="true">🐾</span>
-                        <span className="navbar-logo-text" style={{ color: 'var(--color-primary)' }}>Pet Cuidar</span>
+                    <div className="login-left-top">
+                        <div className="navbar-brand">
+                            <span className="navbar-paw" aria-hidden="true">🐾</span>
+                            <span className="navbar-logo-text" style={{ color: 'var(--color-primary)' }}>Pet Cuidar</span>
+                        </div>
+                        <span className="login-tag-safe">● Acesso por e-mail</span>
                     </div>
-                    <div className="login-hero-illustration" aria-hidden="true">
-                        <div className="login-hero-img-box">🐕🐱</div>
+                    <div className="login-hero-illustration">
+                        <div className="login-hero-img-box" aria-hidden="true">🐕🐱</div>
+                        <div className="login-hero-badge-floating">
+                            <span style={{ fontSize: '1.2rem' }} aria-hidden="true">🩺</span>
+                            <div>
+                                <p className="login-floating-title">Acolhimento &amp; Saúde</p>
+                                <p className="login-floating-desc">Cuidado humanizado e contínuo</p>
+                            </div>
+                        </div>
                     </div>
-                    <h1 className="login-headline-title">Cuidar do seu pet ficou mais fácil.</h1>
+                    <div>
+                        <h1 className="login-headline-title">Cuidar do seu pet ficou mais fácil.</h1>
+                        <p className="login-headline-desc">
+                            Agende consultas e acompanhe o histórico de cuidados do seu melhor amigo em um só lugar.
+                        </p>
+                        <div className="login-pill-chips-row">
+                            <span className="login-chip-feature">🩺 Agendamento de consultas</span>
+                            <span className="login-chip-feature">✉️ Lembretes por e-mail</span>
+                            <span className="login-chip-feature">📋 Histórico Clínico Unificado</span>
+                        </div>
+                    </div>
                 </aside>
                 <main className="login-right-form-col">
+                    <span className="login-welcome-tag">
+                        {cadastro ? '🧡 SEU PET É BEM-VINDO AQUI' : '🧡 BEM-VINDO(A) DE VOLTA'}
+                    </span>
                     <h2 className="login-form-title">{cadastro ? 'Criar conta de tutor' : 'Entrar'}</h2>
                     <p className="login-form-subtitle">
                         {aguardandoCodigo ? 'Digite o código de 8 dígitos recebido por e-mail.'
@@ -96,10 +119,15 @@ export default function Login({ finalidade, onVerificado, onAlternar, erroSessao
                             </div>
                         )}
                     </form>
+                    <div className="login-divider-text"><span>OU</span></div>
                     <Button type="button" variant="outlined" disabled={ocupado} onClick={onAlternar}
                         style={{ width: '100%', marginTop: 16 }}>
                         {cadastro ? 'Voltar à entrada' : 'Criar conta de tutor'}
                     </Button>
+                    <p className="login-footer-disclaimer">
+                        Acesso sem senha: o código enviado ao seu e-mail é de uso único e expira em 10 minutos.
+                        {!cadastro && <><br />Seu perfil de tutor ou equipe é identificado automaticamente após a verificação.</>}
+                    </p>
                 </main>
             </div>
         </div>
