@@ -3,3 +3,4 @@
 .env.*
 !.env.example
 .specs
+deploy/.env.prod
