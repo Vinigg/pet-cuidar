@@ -181,9 +181,9 @@ verificar os scores novamente (30 segundos por padrão).
   "Baixo/Médio/Alto (xx%)". "Indisponível" em todas indica que o back-end não
   está alcançando o microserviço.
 
-## Banco de dados (SQLite) — limitacao importante
+## Banco de dados
 
-O grupo optou por **SQLite** como banco principal. Isso funciona bem para o
+O **SQLite** é o banco padrão. Isso funciona bem para o
 MVP rodando em **uma unica instancia**, pois o arquivo `petcuidar.db` fica no
 disco dessa instancia. Pontos de atencao para producao na AWS:
 
@@ -193,11 +193,7 @@ disco dessa instancia. Pontos de atencao para producao na AWS:
 - Fazer **backup periodico** do arquivo `petcuidar.db` (ex.: job agendado
   copiando o arquivo para um bucket S3), ja que ele vive no disco de uma
   unica instancia (EBS).
-- Caminho de evolucao natural, caso a clinica cresça ou o time queira alta
-  disponibilidade: migrar para **Amazon RDS (PostgreSQL)**, trocando apenas
-  as propriedades `spring.datasource.*` e a dependencia do dialeto em
-  `application.properties`/`pom.xml` — o restante do codigo (entidades,
-  repositories, services) nao precisa mudar, pois usa Spring Data JPA.
+- Para usar **Amazon RDS (PostgreSQL)** e importar o volume Docker local, siga o [procedimento de migração](deploy/README.md#ativar-o-postgresql-do-rds-e-importar-o-volume-docker-local).
 
 ## Segredos e integracoes externas
 
