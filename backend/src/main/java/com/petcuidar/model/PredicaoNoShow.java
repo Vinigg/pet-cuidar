@@ -5,6 +5,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -27,6 +30,7 @@ public class PredicaoNoShow {
      * nenhum tratamento. Fica guardado so para auditoria e nunca e exibido.
      * Nulo quando o preditor esta indisponivel (timeout/circuit breaker).
      */
+    @JdbcTypeCode(SqlTypes.DECIMAL)
     @Column(name = "score_cru")
     private Double scoreCru;
 
@@ -35,6 +39,7 @@ public class PredicaoNoShow {
      * ve e que o restante do sistema consome. Nulo quando nao ha predicao
      * ("score indisponivel"). 0.0 = baixo risco, 1.0 = alto risco.
      */
+    @JdbcTypeCode(SqlTypes.DECIMAL)
     @Column(name = "score_usado")
     private Double scoreUsado;
 
