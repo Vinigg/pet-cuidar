@@ -40,6 +40,14 @@ class AutenticacaoPerfisIntegrationTest {
     @Autowired com.petcuidar.repository.BloqueioAgendaVeterinarioRepository bloqueiosAgenda;
 
     @Test
+    void perfilPadraoUsaSqliteComCatalogoExistente() {
+        org.junit.jupiter.api.Assertions.assertFalse(banco.queryForObject("SELECT sqlite_version()", String.class).isBlank());
+        org.junit.jupiter.api.Assertions.assertEquals(1L, banco.queryForObject(
+                "SELECT count(*) FROM flyway_schema_history WHERE version = '7' AND success = 1", Long.class));
+        System.out.println("PASS C2 API padrao inicia com SQLite");
+    }
+
+    @Test
     void loginUsaPerfilDoServidorESairRevogaSessao() throws Exception {
         String email = novoColaborador();
         Cookie cookie = autenticar(email, "COLABORADOR");

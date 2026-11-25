@@ -26,7 +26,7 @@ public class SessaoService {
 
     static final String CONTA_ATIVA = """
             (c.veterinario_id IS NULL OR EXISTS (
-                SELECT 1 FROM veterinarios v WHERE v.id = c.veterinario_id AND v.ativo = 1
+                SELECT 1 FROM veterinarios v WHERE v.id = c.veterinario_id AND v.ativo = TRUE
             ))
             AND (c.tutor_id IS NULL OR EXISTS (
                 SELECT 1 FROM tutores t WHERE t.id = c.tutor_id AND t.email_normalizado = c.email
