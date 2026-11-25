@@ -30,10 +30,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ActiveProfiles({"prod", "postgres"})
-@SpringBootTest(properties = "app.auth.admin-email=")
+@SpringBootTest(properties = "app.auth.admin-email=" + ApiPostgresqlIT.ADMIN_EMAIL)
 @AutoConfigureMockMvc
 class ApiPostgresqlIT {
 
+    static final String ADMIN_EMAIL = "admin-rds@example.test";
     private static PostgresqlTeste.Banco banco;
 
     @Autowired MockMvc mvc;
@@ -54,7 +55,8 @@ class ApiPostgresqlIT {
         assertEquals("1", jdbc.queryForObject("SELECT version FROM flyway_schema_history", String.class));
         mvc.perform(get("/auth/sessao")).andExpect(status().isUnauthorized());
         assertEquals(banco.schema(), jdbc.queryForObject("SELECT current_schema()", String.class));
-
+        assertEquals("ADMIN", jdbc.queryForObject(
+                "SELECT perfil FROM contas WHERE email = ?", String.class, ADMIN_EMAIL));
     }
 
     @Test

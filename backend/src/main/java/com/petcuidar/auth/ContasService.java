@@ -93,7 +93,7 @@ public class ContasService implements ApplicationRunner {
     public void exigirEmailLivre(String email, Long veterinarioId) {
         if (existe("""
                 SELECT 1 FROM contas WHERE email = ? AND
-                    (? IS NULL OR veterinario_id IS NULL OR veterinario_id <> ?)
+                    (CAST(? AS BIGINT) IS NULL OR veterinario_id IS NULL OR veterinario_id <> ?)
                 """, email, veterinarioId, veterinarioId)
                 || existe("SELECT 1 FROM tutores WHERE email_normalizado = ?", email)) {
             throw new CadastroConflitanteException("Este e-mail já está vinculado a um cadastro.");
