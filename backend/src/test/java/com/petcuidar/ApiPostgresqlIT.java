@@ -54,7 +54,7 @@ class ApiPostgresqlIT {
         assertEquals("1", jdbc.queryForObject("SELECT version FROM flyway_schema_history", String.class));
         mvc.perform(get("/auth/sessao")).andExpect(status().isUnauthorized());
         assertEquals(banco.schema(), jdbc.queryForObject("SELECT current_schema()", String.class));
-        System.out.println("PASS C1 API inicia com esquema PostgreSQL validado");
+
     }
 
     @Test
@@ -66,7 +66,10 @@ class ApiPostgresqlIT {
         assertThrows(SQLException.class, () -> DriverManager.getConnection(
                 semCertificado, banco.usuario(), banco.senha()));
         assertTrue(banco.url().contains("sslmode=verify-full"));
-        System.out.println("PASS C4 conexao valida certificado e hostname");
+        var nomeIncorreto = banco.url().replace("127.0.0.1:", "localhost:");
+        var falha = assertThrows(SQLException.class, () -> DriverManager.getConnection(
+                nomeIncorreto, banco.usuario(), banco.senha()));
+        assertTrue(falha.getMessage().contains("localhost"));
     }
 
     @Test

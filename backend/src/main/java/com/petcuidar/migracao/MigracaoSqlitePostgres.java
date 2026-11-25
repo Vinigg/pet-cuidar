@@ -2,9 +2,10 @@ package com.petcuidar.migracao;
 
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -17,11 +18,11 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Collections;
-import java.util.HashSet;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+
 import java.util.stream.Stream;
 
 public final class MigracaoSqlitePostgres {
@@ -93,31 +94,32 @@ public final class MigracaoSqlitePostgres {
                     throw new Falha("A origem deve estar no esquema SQLite V7.");
                 }
             }
-            Set<String> esperadas = Set.copyOf(Stream.concat(
-                    VERIFICAR_DESTINO.stream(), Stream.of("flyway_schema_history")).toList());
-            try (var tabelas = sql.executeQuery("""
-                    SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'
-                    """)) {
-                var encontradas = new HashSet<String>();
-                while (tabelas.next()) {
-                    encontradas.add(tabelas.getString(1));
-                }
-                if (!esperadas.equals(encontradas)) {
-                    throw new Falha("As tabelas da origem não correspondem ao esquema SQLite V7.");
-                }
-            }
-            for (Tabela tabela : TABELAS) {
-                try (var colunas = sql.executeQuery("PRAGMA table_info(" + tabela.nome() + ")")) {
-                    var encontradas = new HashSet<String>();
-                    while (colunas.next()) {
-                        encontradas.add(colunas.getString("name"));
-                    }
-                    if (!tabela.campos().equals(encontradas)) {
-                        throw new Falha("Colunas incompatíveis na tabela SQLite " + tabela.nome() + ".");
-                    }
-                }
+        }
+
+        try (Connection referencia = DriverManager.getConnection("jdbc:sqlite::memory:")) {
+            Flyway.configure().dataSource(new SingleConnectionDataSource(referencia, true))
+                    .locations("classpath:db/migration")
+                    .target("7")
+                    .load().migrate();
+            if (!catalogoSqlite(referencia).equals(catalogoSqlite(origem))) {
+                throw new Falha("O catálogo da origem não corresponde ao esquema SQLite V7.");
             }
         }
+    }
+
+    private static Map<String, String> catalogoSqlite(Connection banco) throws SQLException {
+        Map<String, String> catalogo = new LinkedHashMap<>();
+        try (var sql = banco.createStatement(); var registros = sql.executeQuery("""
+                SELECT type, name, sql FROM sqlite_schema
+                WHERE name NOT GLOB 'sqlite_*' AND tbl_name <> 'flyway_schema_history' AND sql IS NOT NULL
+                ORDER BY type, name
+                """)) {
+            while (registros.next()) {
+                catalogo.put(registros.getString("type") + "." + registros.getString("name"),
+                        registros.getString("sql").replaceAll("\\s+", " ").strip());
+            }
+        }
+        return catalogo;
     }
 
     private static void prepararCatalogo(String url, String usuario, String senha) {
@@ -167,7 +169,7 @@ public final class MigracaoSqlitePostgres {
 
     private static long copiarTabela(Connection origem, Connection destino, Tabela tabela, ZoneId fuso) {
         String select = "SELECT " + tabela.colunas() + " FROM " + tabela.nome() + " ORDER BY id";
-        String parametros = String.join(", ", Collections.nCopies(tabela.campos().size(), "?"));
+        String parametros = String.join(", ", Collections.nCopies(tabela.colunas().split(",").length, "?"));
         String insert = "INSERT INTO " + tabela.nome() + " (" + tabela.colunas() + ") VALUES (" + parametros + ")";
         try (var consulta = origem.createStatement();
              var registros = consulta.executeQuery(select);
@@ -213,7 +215,7 @@ public final class MigracaoSqlitePostgres {
                 destino.setBoolean(indice, numero == 1);
             }
             case Types.DECIMAL, Types.NUMERIC -> destino.setBigDecimal(indice,
-                    new BigDecimal(origem.getString(indice)).setScale(3, RoundingMode.UNNECESSARY));
+                    new BigDecimal(origem.getString(indice)));
             case Types.TIMESTAMP -> {
                 LocalDateTime data = valor instanceof String texto
                         ? LocalDateTime.parse(texto.replace(' ', 'T'))
@@ -240,11 +242,7 @@ public final class MigracaoSqlitePostgres {
         return new Falha(mensagem + (estado == null ? "" : " SQLSTATE " + estado + "."), erro);
     }
 
-    private record Tabela(String nome, String colunas) {
-        Set<String> campos() {
-            return Set.of(colunas.split(",\\s*"));
-        }
-    }
+    private record Tabela(String nome, String colunas) {}
 
     public static final class Falha extends RuntimeException {
         public Falha(String mensagem) {

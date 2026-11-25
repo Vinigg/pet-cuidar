@@ -53,6 +53,5 @@ class ComandoMigracaoPostgresqlIT {
         assertFalse(mensagens.contains(destino.senha()));
         assertFalse(mensagens.contains("tutor@example.test"));
         assertFalse(mensagens.contains("Descrição clínica teste"));
-        System.out.println("PASS C9 comando informa contagens sem expor valores");
     }
 }

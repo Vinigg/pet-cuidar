@@ -37,13 +37,18 @@ class MigracaoPostgresqlIT {
     }
 
     @Test
-    void preservaLinhasEReferenciasDeTodasAsTabelas() {
+    void preservaLinhasEReferenciasDeTodasAsTabelas() throws SQLException {
+        alterarOrigem("UPDATE predicoes_no_show SET score_cru=0.6123456, score_usado=0.51234567");
+        alterarOrigem("""
+                INSERT INTO contas(id,email,nome,perfil,tutor_id)
+                VALUES(102,'tutor@example.test','Tutor teste','TUTOR',11)
+                """);
         Map<String, Long> contagens = migrar(ZoneOffset.UTC);
         JdbcTemplate jdbc = destino.jdbc();
         assertEquals(IDS.keySet(), contagens.keySet());
         IDS.forEach((tabela, id) -> {
-            assertEquals(1L, contagens.get(tabela));
-            assertEquals(id, jdbc.queryForObject("SELECT id FROM " + tabela, Long.class));
+            assertEquals(tabela.equals("contas") ? 2L : 1L, contagens.get(tabela));
+            assertEquals(id, jdbc.queryForObject("SELECT min(id) FROM " + tabela, Long.class));
         });
 
         String vinculos = jdbc.queryForObject("""
@@ -62,13 +67,48 @@ class MigracaoPostgresqlIT {
         assertEquals("Descrição clínica teste", jdbc.queryForObject(
                 "SELECT descricao FROM historico_atendimentos", String.class));
         assertEquals("REALIZADA", jdbc.queryForObject("SELECT status FROM consultas", String.class));
-        assertEquals("VETERINARIO", jdbc.queryForObject("SELECT perfil FROM contas", String.class));
+        assertEquals("VETERINARIO", jdbc.queryForObject("SELECT perfil FROM contas WHERE id=101", String.class));
+        assertEquals(11L, jdbc.queryForObject("SELECT tutor_id FROM contas WHERE id=102", Long.class));
+        assertEquals(21L, jdbc.queryForObject("SELECT veterinario_criacao_id FROM historico_atendimentos", Long.class));
+        assertEquals(21L, jdbc.queryForObject("SELECT veterinario_atualizacao_id FROM historico_atendimentos", Long.class));
         assertEquals("08:00", jdbc.queryForObject("SELECT hora_inicio FROM horarios_atendimento_veterinario", String.class));
         assertEquals("Bloqueio teste", jdbc.queryForObject("SELECT motivo FROM bloqueios_agenda_veterinario", String.class));
         assertEquals("Lembrete final", jdbc.queryForObject("SELECT texto_validado FROM lembretes", String.class));
-        assertEquals(new BigDecimal("0.372"), jdbc.queryForObject("SELECT score_cru FROM predicoes_no_show", BigDecimal.class));
+        assertEquals(new BigDecimal("0.6123456"), jdbc.queryForObject("SELECT score_cru FROM predicoes_no_show", BigDecimal.class));
+        assertEquals(new BigDecimal("0.51234567"), jdbc.queryForObject("SELECT score_usado FROM predicoes_no_show", BigDecimal.class));
         assertEquals(Boolean.TRUE, jdbc.queryForObject("SELECT usou_fallback FROM predicoes_no_show", Boolean.class));
         assertNull(jdbc.queryForObject("SELECT ultimo_erro FROM lembretes", String.class));
+        try (var sqlite = DriverManager.getConnection("jdbc:sqlite:" + origem.toAbsolutePath());
+             var sql = sqlite.createStatement()) {
+            for (String tabela : IDS.keySet()) {
+                var salvos = jdbc.queryForList("SELECT * FROM " + tabela + " ORDER BY id");
+                try (var colunaOrigem = sql.executeQuery("SELECT * FROM " + tabela + " ORDER BY id")) {
+                    int indice = 0;
+                    while (colunaOrigem.next()) {
+                        var linha = salvos.get(indice++);
+                        for (var coluna : linha.entrySet()) {
+                            String nome = coluna.getKey();
+                            Object esperado = colunaOrigem.getObject(nome);
+                            Object valor = coluna.getValue();
+                            if (valor instanceof java.sql.Timestamp data) {
+                                valor = data.toLocalDateTime();
+                                esperado = esperado instanceof Number epoch
+                                        ? LocalDateTime.ofInstant(Instant.ofEpochMilli(epoch.longValue()), ZoneOffset.UTC)
+                                        : LocalDateTime.parse(((String) esperado).replace(' ', 'T'));
+                            } else if (valor instanceof BigDecimal) {
+                                esperado = new BigDecimal(colunaOrigem.getString(nome));
+                            } else if (valor instanceof Boolean) {
+                                esperado = colunaOrigem.getBoolean(nome);
+                            } else if (valor instanceof Long && esperado instanceof Number numero) {
+                                esperado = numero.longValue();
+                            }
+                            assertEquals(esperado, valor, tabela + "." + nome);
+                        }
+                    }
+                    assertEquals(salvos.size(), indice, tabela);
+                }
+            }
+        }
         System.out.println("PASS C5 carga preserva dados ids e vinculos");
     }
 
@@ -89,7 +129,7 @@ class MigracaoPostgresqlIT {
         assertEquals(esperado, jdbc.queryForObject("SELECT data_envio FROM lembretes", LocalDateTime.class));
         assertEquals(esperado, jdbc.queryForObject("SELECT data_ultima_tentativa FROM lembretes", LocalDateTime.class));
         assertEquals(esperado, jdbc.queryForObject("SELECT data_calculo FROM predicoes_no_show", LocalDateTime.class));
-        System.out.println("PASS C6 carga preserva horarios da API");
+
     }
 
     @Test
@@ -118,7 +158,7 @@ class MigracaoPostgresqlIT {
     }
 
     @Test
-    void recusaVersaoIncorretaOuReferenciaInvalidaAntesDeCriarTabelas() throws SQLException {
+    void recusaOrigemInvalidaAntesDeCriarTabelas() throws Exception {
         alterarOrigem("UPDATE flyway_schema_history SET version='6' WHERE version='7'");
         assertThrows(MigracaoSqlitePostgres.Falha.class, () -> migrar(ZoneOffset.UTC));
         assertDestinoSemCatalogo();
@@ -126,6 +166,15 @@ class MigracaoPostgresqlIT {
         alterarOrigem("UPDATE pets SET tutor_id=98765");
         var erro = assertThrows(MigracaoSqlitePostgres.Falha.class, () -> migrar(ZoneOffset.UTC));
         assertTrue(erro.getMessage().contains("referências inválidas"));
+        assertDestinoSemCatalogo();
+        alterarOrigem("UPDATE pets SET tutor_id=11");
+        alterarOrigem("ALTER TABLE desafios_email RENAME COLUMN tentativas TO tentativas_fora_do_v7");
+        erro = assertThrows(MigracaoSqlitePostgres.Falha.class, () -> migrar(ZoneOffset.UTC));
+        assertTrue(erro.getMessage().contains("catálogo da origem"));
+        assertDestinoSemCatalogo();
+
+        java.nio.file.Files.writeString(origem, "arquivo corrompido");
+        assertThrows(MigracaoSqlitePostgres.Falha.class, () -> migrar(ZoneOffset.UTC));
         assertDestinoSemCatalogo();
         System.out.println("PASS C10 recusa origem invalida antes da carga");
     }
@@ -137,6 +186,17 @@ class MigracaoPostgresqlIT {
         assertThrows(MigracaoSqlitePostgres.Falha.class, () -> migrar(ZoneOffset.UTC));
         assertEquals("Já existente", destino.jdbc().queryForObject("SELECT nome FROM veterinarios", String.class));
         assertEquals(0L, destino.jdbc().queryForObject("SELECT count(*) FROM tutores", Long.class));
+        destino.jdbc().update("DELETE FROM veterinarios");
+        destino.jdbc().update("""
+                INSERT INTO contas (id, email, nome, perfil)
+                VALUES (56, 'admin@example.test', 'Admin anterior', 'ADMIN')
+                """);
+        var erro = assertThrows(MigracaoSqlitePostgres.Falha.class, () -> migrar(ZoneOffset.UTC));
+        assertTrue(erro.getMessage().contains("contas"));
+        assertEquals("admin@example.test", destino.jdbc().queryForObject("SELECT email FROM contas WHERE id = 56", String.class));
+        assertEquals(1L, destino.jdbc().queryForObject("SELECT count(*) FROM contas", Long.class));
+        IDS.keySet().stream().filter(tabela -> !tabela.equals("contas")).forEach(tabela ->
+                assertEquals(0L, destino.jdbc().queryForObject("SELECT count(*) FROM " + tabela, Long.class)));
         System.out.println("PASS C11 recusa destino com registros existentes");
     }
 
